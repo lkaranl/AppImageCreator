@@ -299,18 +299,19 @@ fn build_ui(app: &Application) {
     button_box.set_margin_end(12);
 
     // Botão com estrutura para progress
-    let button_content = Box::new(Orientation::Vertical, 0);
+    let button_content = Box::new(Orientation::Vertical, 4);
 
     let button_label = Label::new(Some("Gerar AppImage"));
-    button_label.set_margin_top(12);
-    button_label.set_margin_bottom(8);
+    button_label.set_margin_top(10);
+    button_label.set_margin_bottom(4);
     button_content.append(&button_label);
 
     let progress_bar = ProgressBar::new();
     progress_bar.set_visible(false);
-    progress_bar.set_margin_start(12);
-    progress_bar.set_margin_end(12);
-    progress_bar.set_margin_bottom(4);
+    progress_bar.set_margin_start(20);
+    progress_bar.set_margin_end(20);
+    progress_bar.set_margin_bottom(8);
+    progress_bar.set_size_request(-1, 6); // Altura de 6px
     button_content.append(&progress_bar);
 
     let generate_button = Button::new();
@@ -340,14 +341,19 @@ fn build_ui(app: &Application) {
         let toast_clone = toast_overlay.clone();
         let progress_bar_clone = progress_bar.clone();
         let button_clone = generate_button.clone();
+        let button_label_clone = button_label.clone();
         let pulse_source_clone = pulse_source.clone();
 
         result_receiver.attach(None, move |result| {
+            // Parar animação de pulso
             if let Some(source_id) = pulse_source_clone.borrow_mut().take() {
                 source_id.remove();
             }
 
+            // Restaurar estado do botão
             progress_bar_clone.set_visible(false);
+            progress_bar_clone.set_fraction(0.0);
+            button_label_clone.set_text("Gerar AppImage");
             button_clone.set_sensitive(true);
 
             match result {
@@ -511,6 +517,7 @@ fn build_ui(app: &Application) {
         let toast_clone = toast_overlay.clone();
         let progress_bar_clone = progress_bar.clone();
         let button_clone = generate_button.clone();
+        let button_label_clone = button_label.clone();
         let sender_clone = result_sender.clone();
         let pulse_source_clone = pulse_source.clone();
 
@@ -556,19 +563,22 @@ fn build_ui(app: &Application) {
             let output_folder = state_data.output_folder.unwrap();
             let output_path = output_folder.join(format!("{}.AppImage", metadata_data.name));
 
-            // Mostrar progress bar no botão
+            // Mostrar progress bar no botão com feedback visual melhorado
             button_clone.set_sensitive(false);
+            button_label_clone.set_text("Gerando AppImage...");
             progress_bar_clone.set_visible(true);
-            progress_bar_clone.pulse();
+            progress_bar_clone.set_fraction(0.0);
 
+            // Limpar timeout anterior se existir
             if let Some(source_id) = pulse_source_clone.borrow_mut().take() {
                 source_id.remove();
             }
 
+            // Criar animação de pulso suave (100ms para movimento mais fluido)
             let progress_for_timeout = progress_bar_clone.clone();
             let pulse_source_for_timeout = pulse_source_clone.clone();
             let timeout_id =
-                glib::timeout_add_local(Duration::from_millis(120), move || {
+                glib::timeout_add_local(Duration::from_millis(100), move || {
                     progress_for_timeout.pulse();
                     ControlFlow::Continue
                 });
