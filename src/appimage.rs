@@ -3,8 +3,7 @@ use std::io;
 use std::path::Path;
 use std::process::Command;
 
-use image::io::Reader as ImageReader;
-use image::ImageFormat;
+use image::{ImageFormat, ImageReader};
 
 use crate::AppImageMetadata;
 
