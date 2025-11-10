@@ -14,6 +14,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::path::PathBuf;
 use std::time::Duration;
+use async_channel::unbounded;
 
 const APP_ID: &str = "com.github.appimage-creator";
 
@@ -321,8 +322,7 @@ fn build_ui(app: &Application) {
     button_box.append(&generate_button);
 
     let pulse_source = Rc::new(RefCell::new(None::<SourceId>));
-    let (result_sender, result_receiver) =
-        glib::MainContext::channel::<Result<PathBuf, String>>(glib::Priority::default());
+    let (result_sender, result_receiver) = unbounded::<Result<PathBuf, String>>();
 
     main_box.append(&button_box);
 
@@ -344,35 +344,35 @@ fn build_ui(app: &Application) {
         let button_label_clone = button_label.clone();
         let pulse_source_clone = pulse_source.clone();
 
-        result_receiver.attach(None, move |result| {
-            // Parar animação de pulso
-            if let Some(source_id) = pulse_source_clone.borrow_mut().take() {
-                source_id.remove();
-            }
-
-            // Restaurar estado do botão
-            progress_bar_clone.set_visible(false);
-            progress_bar_clone.set_fraction(0.0);
-            button_label_clone.set_text("Gerar AppImage");
-            button_clone.set_sensitive(true);
-
-            match result {
-                Ok(path) => {
-                    let toast = Toast::new(&format!(
-                        "AppImage gerado com sucesso em:\n{}",
-                        path.display()
-                    ));
-                    toast.set_timeout(5);
-                    toast_clone.add_toast(toast);
+        glib::MainContext::default().spawn_local(async move {
+            while let Ok(result) = result_receiver.recv().await {
+                // Parar animação de pulso
+                if let Some(source_id) = pulse_source_clone.borrow_mut().take() {
+                    source_id.remove();
                 }
-                Err(err) => {
-                    let toast = Toast::new(&format!("Erro: {}", err));
-                    toast.set_timeout(8);
-                    toast_clone.add_toast(toast);
+
+                // Restaurar estado do botão
+                progress_bar_clone.set_visible(false);
+                progress_bar_clone.set_fraction(0.0);
+                button_label_clone.set_text("Gerar AppImage");
+                button_clone.set_sensitive(true);
+
+                match result {
+                    Ok(path) => {
+                        let toast = Toast::new(&format!(
+                            "AppImage gerado com sucesso em:\n{}",
+                            path.display()
+                        ));
+                        toast.set_timeout(5);
+                        toast_clone.add_toast(toast);
+                    }
+                    Err(err) => {
+                        let toast = Toast::new(&format!("Erro: {}", err));
+                        toast.set_timeout(8);
+                        toast_clone.add_toast(toast);
+                    }
                 }
             }
-
-            ControlFlow::Continue
         });
     }
 
@@ -595,7 +595,7 @@ fn build_ui(app: &Application) {
                 .map(|_| output_path)
                 .map_err(|err| err.to_string());
 
-                let _ = sender_for_thread.send(result);
+                let _ = sender_for_thread.send_blocking(result);
             });
         });
     }
