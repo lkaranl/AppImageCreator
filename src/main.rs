@@ -4,9 +4,10 @@ use gtk4::prelude::*;
 use gtk4::{
     Application, Box, Button, Entry, FileChooserAction, FileChooserDialog,
     Label, Orientation, ResponseType, ScrolledWindow, Align, ProgressBar,
-    CheckButton,
+    CheckButton, CssProvider,
 };
 use gtk4::glib::{self, ControlFlow, SourceId};
+use gtk4::gdk::Display;
 use libadwaita as adw;
 use libadwaita::prelude::*;
 use adw::{ApplicationWindow, HeaderBar, PreferencesGroup, ActionRow, Clamp, Toast, ToastOverlay};
@@ -52,11 +53,18 @@ fn main() {
 fn build_ui(app: &Application) {
     let app_state = Rc::new(RefCell::new(AppState::default()));
 
+    // Carregar estilos CSS customizados
+    load_css();
+
     let window = ApplicationWindow::builder()
         .application(app)
         .default_width(700)
         .default_height(600)
         .build();
+
+    // Tentar configurar ícone da aplicação
+    // Se o ícone estiver instalado no sistema como "appimage-creator"
+    gtk4::Window::set_default_icon_name("appimage-creator");
 
     // Criar HeaderBar
     let header_bar = HeaderBar::new();
@@ -352,6 +360,7 @@ fn build_ui(app: &Application) {
                 }
 
                 // Restaurar estado do botão
+                progress_bar_clone.remove_css_class("pulsing");
                 progress_bar_clone.set_visible(false);
                 progress_bar_clone.set_fraction(0.0);
                 button_label_clone.set_text("Gerar AppImage");
@@ -568,6 +577,7 @@ fn build_ui(app: &Application) {
             button_label_clone.set_text("Gerando AppImage...");
             progress_bar_clone.set_visible(true);
             progress_bar_clone.set_fraction(0.0);
+            progress_bar_clone.add_css_class("pulsing");
 
             // Limpar timeout anterior se existir
             if let Some(source_id) = pulse_source_clone.borrow_mut().take() {
@@ -611,4 +621,70 @@ where
         let text = entry.text().to_string();
         setter(&mut state.borrow_mut(), text);
     });
+}
+
+fn load_css() {
+    let css = r#"
+        /* Espaçamento consistente entre grupos */
+        preferencesgroup {
+            margin-top: 16px;
+            margin-bottom: 16px;
+        }
+
+        preferencesgroup:first-child {
+            margin-top: 12px;
+        }
+
+        preferencesgroup:last-child {
+            margin-bottom: 12px;
+        }
+
+        /* Progress bar com bordas arredondadas e estilo melhorado */
+        progressbar trough {
+            min-height: 6px;
+            border-radius: 6px;
+            background-color: alpha(@window_fg_color, 0.15);
+        }
+
+        progressbar progress {
+            min-height: 6px;
+            border-radius: 6px;
+            background-color: @accent_bg_color;
+            box-shadow: 0 1px 3px alpha(black, 0.2);
+        }
+
+        /* Melhorar espaçamento dos ActionRow */
+        row {
+            padding: 8px 0;
+        }
+
+        /* Estilo para o botão principal */
+        button.suggested-action.pill {
+            min-height: 44px;
+            font-weight: bold;
+        }
+
+        /* Animação suave para progress bar */
+        @keyframes pulse {
+            0% { opacity: 0.8; }
+            50% { opacity: 1.0; }
+            100% { opacity: 0.8; }
+        }
+
+        progressbar.pulsing progress {
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+    "#;
+
+    let provider = CssProvider::new();
+    provider.load_from_data(css);
+
+    // Aplicar CSS ao display padrão
+    if let Some(display) = Display::default() {
+        gtk4::style_context_add_provider_for_display(
+            &display,
+            &provider,
+            gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
+        );
+    }
 }
