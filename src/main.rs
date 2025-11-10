@@ -138,7 +138,14 @@ fn build_ui(app: &Application) {
     binary_entry.set_valign(Align::Center);
     binary_entry.set_hexpand(true);
     binary_entry.set_width_chars(30);
-    let binary_button = Button::with_label("Procurar");
+    let binary_button = Button::new();
+    let binary_button_box = Box::new(Orientation::Horizontal, 6);
+    let binary_button_icon = Label::new(Some("🔍"));
+    binary_button_icon.add_css_class("dim-label");
+    let binary_button_label = Label::new(Some("Procurar"));
+    binary_button_box.append(&binary_button_icon);
+    binary_button_box.append(&binary_button_label);
+    binary_button.set_child(Some(&binary_button_box));
     binary_button.set_valign(Align::Center);
     let binary_box = Box::new(Orientation::Horizontal, 6);
     binary_box.append(&binary_entry);
@@ -158,7 +165,14 @@ fn build_ui(app: &Application) {
     icon_entry.set_valign(Align::Center);
     icon_entry.set_hexpand(true);
     icon_entry.set_width_chars(30);
-    let icon_button = Button::with_label("Procurar");
+    let icon_button = Button::new();
+    let icon_button_box = Box::new(Orientation::Horizontal, 6);
+    let icon_button_icon = Label::new(Some("🖼️"));
+    icon_button_icon.add_css_class("dim-label");
+    let icon_button_label = Label::new(Some("Procurar"));
+    icon_button_box.append(&icon_button_icon);
+    icon_button_box.append(&icon_button_label);
+    icon_button.set_child(Some(&icon_button_box));
     icon_button.set_valign(Align::Center);
     let icon_box = Box::new(Orientation::Horizontal, 6);
     icon_box.append(&icon_entry);
@@ -367,7 +381,14 @@ fn build_ui(app: &Application) {
     output_entry.set_valign(Align::Center);
     output_entry.set_hexpand(true);
     output_entry.set_width_chars(30);
-    let output_button = Button::with_label("Escolher Pasta");
+    let output_button = Button::new();
+    let output_button_box = Box::new(Orientation::Horizontal, 6);
+    let output_button_icon = Label::new(Some("📁"));
+    output_button_icon.add_css_class("dim-label");
+    let output_button_label = Label::new(Some("Escolher Pasta"));
+    output_button_box.append(&output_button_icon);
+    output_button_box.append(&output_button_label);
+    output_button.set_child(Some(&output_button_box));
     output_button.set_valign(Align::Center);
     let output_box = Box::new(Orientation::Horizontal, 6);
     output_box.append(&output_entry);
@@ -410,8 +431,14 @@ fn build_ui(app: &Application) {
     // Botão com estrutura para progress
     let button_content = Box::new(Orientation::Vertical, 4);
 
+    let button_icon = Label::new(Some("⚙️"));
+    button_icon.set_margin_top(10);
+    button_icon.set_margin_bottom(2);
+    button_icon.add_css_class("dim-label");
+    button_content.append(&button_icon);
+
     let button_label = Label::new(Some("Gerar AppImage"));
-    button_label.set_margin_top(10);
+    button_label.set_margin_top(2);
     button_label.set_margin_bottom(4);
     button_content.append(&button_label);
 
