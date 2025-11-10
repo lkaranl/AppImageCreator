@@ -62,6 +62,36 @@ fn build_ui(app: &Application) {
         .default_height(600)
         .build();
 
+    let css_provider = CssProvider::new();
+    css_provider.load_from_data(
+        "
+        entry.error {
+            border: 1px solid @error_color;
+            border-radius: 6px;
+        }
+        entry.success {
+            border: 1px solid @success_color;
+            border-radius: 6px;
+        }
+        .preferences-row.error {
+            border: 1px solid @error_color;
+            border-radius: 6px;
+        }
+        .preferences-row.success {
+            border: 1px solid @success_color;
+            border-radius: 6px;
+        }
+        "
+    );
+
+    if let Some(display) = Display::default() {
+        gtk4::style_context_add_provider_for_display(
+            &display,
+            &css_provider,
+            gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
+        );
+    }
+
     // Tentar configurar ícone da aplicação
     // Se o ícone estiver instalado no sistema como "appimage-creator"
     gtk4::Window::set_default_icon_name("appimage-creator");
@@ -335,6 +365,24 @@ fn build_ui(app: &Application) {
     output_row.set_activatable_widget(Some(&output_button));
     output_group.add(&output_row);
 
+    let app_state_for_validation = app_state.clone();
+    let binary_entry_for_validation = binary_entry.clone();
+    let icon_entry_for_validation = icon_entry.clone();
+    let name_entry_for_validation = name_entry.clone();
+    let exec_entry_for_validation = exec_entry.clone();
+    let categories_row_for_validation = categories_row.clone();
+    let output_entry_for_validation = output_entry.clone();
+
+    let update_validation: Rc<dyn Fn()> = Rc::new(move || {
+        let state = app_state_for_validation.borrow();
+        set_widget_validation(&binary_entry_for_validation, !state.metadata.binary_path.is_empty());
+        set_widget_validation(&icon_entry_for_validation, !state.metadata.icon_path.is_empty());
+        set_widget_validation(&name_entry_for_validation, !state.metadata.name.is_empty());
+        set_widget_validation(&exec_entry_for_validation, !state.metadata.exec.is_empty());
+        set_widget_validation(&categories_row_for_validation, !state.metadata.categories.is_empty());
+        set_widget_validation(&output_entry_for_validation, state.output_folder.is_some());
+    });
+
     content_box.append(&output_group);
 
     scrolled.set_child(Some(&content_box));
@@ -431,6 +479,7 @@ fn build_ui(app: &Application) {
         let window_clone = window.clone();
         let entry_clone = binary_entry.clone();
         let state_clone = app_state.clone();
+        let update_validation_clone = update_validation.clone();
         binary_button.connect_clicked(move |_| {
             let dialog = FileChooserDialog::new(
                 Some("Selecione o Binário"),
@@ -441,6 +490,7 @@ fn build_ui(app: &Application) {
 
             let entry_clone2 = entry_clone.clone();
             let state_clone2 = state_clone.clone();
+            let update_validation_inner = update_validation_clone.clone();
             dialog.connect_response(move |dialog, response| {
                 if response == ResponseType::Accept {
                     if let Some(file) = dialog.file() {
@@ -448,6 +498,7 @@ fn build_ui(app: &Application) {
                             let path_str = path.to_string_lossy().to_string();
                             entry_clone2.set_text(&path_str);
                             state_clone2.borrow_mut().metadata.binary_path = path_str;
+                            update_validation_inner.as_ref()();
                         }
                     }
                 }
@@ -463,6 +514,7 @@ fn build_ui(app: &Application) {
         let window_clone = window.clone();
         let entry_clone = icon_entry.clone();
         let state_clone = app_state.clone();
+        let update_validation_clone = update_validation.clone();
         icon_button.connect_clicked(move |_| {
             let dialog = FileChooserDialog::new(
                 Some("Selecione o Ícone"),
@@ -473,6 +525,7 @@ fn build_ui(app: &Application) {
 
             let entry_clone2 = entry_clone.clone();
             let state_clone2 = state_clone.clone();
+            let update_validation_inner = update_validation_clone.clone();
             dialog.connect_response(move |dialog, response| {
                 if response == ResponseType::Accept {
                     if let Some(file) = dialog.file() {
@@ -480,6 +533,7 @@ fn build_ui(app: &Application) {
                             let path_str = path.to_string_lossy().to_string();
                             entry_clone2.set_text(&path_str);
                             state_clone2.borrow_mut().metadata.icon_path = path_str;
+                            update_validation_inner.as_ref()();
                         }
                     }
                 }
@@ -495,6 +549,7 @@ fn build_ui(app: &Application) {
         let window_clone = window.clone();
         let entry_clone = output_entry.clone();
         let state_clone = app_state.clone();
+        let update_validation_clone = update_validation.clone();
         output_button.connect_clicked(move |_| {
             let dialog = FileChooserDialog::new(
                 Some("Escolher Pasta de Saída"),
@@ -505,6 +560,7 @@ fn build_ui(app: &Application) {
 
             let entry_clone2 = entry_clone.clone();
             let state_clone2 = state_clone.clone();
+            let update_validation_inner = update_validation_clone.clone();
             dialog.connect_response(move |dialog, response| {
                 if response == ResponseType::Accept {
                     if let Some(file) = dialog.file() {
@@ -512,6 +568,7 @@ fn build_ui(app: &Application) {
                             let path_str = path.to_string_lossy().to_string();
                             entry_clone2.set_text(&path_str);
                             state_clone2.borrow_mut().output_folder = Some(path);
+                            update_validation_inner.as_ref()();
                         }
                     }
                 }
@@ -523,20 +580,64 @@ fn build_ui(app: &Application) {
     }
 
     // Conectar mudanças nos campos de texto
-    connect_entry_to_state(&name_entry, app_state.clone(), |s, v| s.metadata.name = v);
-    connect_entry_to_state(&exec_entry, app_state.clone(), |s, v| s.metadata.exec = v);
-    connect_entry_to_state(&version_entry, app_state.clone(), |s, v| s.metadata.version = v);
-    connect_entry_to_state(&comment_entry, app_state.clone(), |s, v| s.metadata.comment = v);
-    connect_entry_to_state(&author_entry, app_state.clone(), |s, v| s.metadata.author = v);
-    connect_entry_to_state(&website_entry, app_state.clone(), |s, v| s.metadata.website = v);
+    connect_entry_to_state(
+        &binary_entry,
+        app_state.clone(),
+        |s, v| s.metadata.binary_path = v,
+        update_validation.clone(),
+    );
+    connect_entry_to_state(
+        &icon_entry,
+        app_state.clone(),
+        |s, v| s.metadata.icon_path = v,
+        update_validation.clone(),
+    );
+    connect_entry_to_state(
+        &name_entry,
+        app_state.clone(),
+        |s, v| s.metadata.name = v,
+        update_validation.clone(),
+    );
+    connect_entry_to_state(
+        &exec_entry,
+        app_state.clone(),
+        |s, v| s.metadata.exec = v,
+        update_validation.clone(),
+    );
+    connect_entry_to_state(
+        &version_entry,
+        app_state.clone(),
+        |s, v| s.metadata.version = v,
+        update_validation.clone(),
+    );
+    connect_entry_to_state(
+        &comment_entry,
+        app_state.clone(),
+        |s, v| s.metadata.comment = v,
+        update_validation.clone(),
+    );
+    connect_entry_to_state(
+        &author_entry,
+        app_state.clone(),
+        |s, v| s.metadata.author = v,
+        update_validation.clone(),
+    );
+    connect_entry_to_state(
+        &website_entry,
+        app_state.clone(),
+        |s, v| s.metadata.website = v,
+        update_validation.clone(),
+    );
 
     let license_checks = Rc::new(license_checks_vec);
     let license_update_flag = Rc::new(Cell::new(false));
 
     // Conectar mudanças nos checkboxes de categorias
+    let update_validation_for_categories = update_validation.clone();
     for (cat_value, check) in category_checks {
         let state_clone = app_state.clone();
         let cat_value_owned = cat_value.to_string();
+        let update_validation_local = update_validation_for_categories.clone();
         check.connect_toggled(move |check_btn| {
             let mut state = state_clone.borrow_mut();
             let mut categories: Vec<String> = state.metadata.categories
@@ -561,8 +662,12 @@ fn build_ui(app: &Application) {
             } else {
                 format!("{};", categories.join(";"))
             };
+
+            update_validation_local.as_ref()();
         });
     }
+
+    update_validation.as_ref()();
 
     // Conectar seleção de licença
     {
@@ -715,13 +820,20 @@ fn build_ui(app: &Application) {
     window.present();
 }
 
-fn connect_entry_to_state<F>(entry: &Entry, state: Rc<RefCell<AppState>>, setter: F)
+fn connect_entry_to_state<F>(
+    entry: &Entry,
+    state: Rc<RefCell<AppState>>,
+    setter: F,
+    on_change: Rc<dyn Fn()>,
+)
 where
     F: Fn(&mut AppState, String) + 'static,
 {
+    let on_change_clone = on_change.clone();
     entry.connect_changed(move |entry| {
         let text = entry.text().to_string();
         setter(&mut state.borrow_mut(), text);
+        on_change_clone.as_ref()();
     });
 }
 
@@ -739,6 +851,17 @@ fn add_prefix_icon_to_expander_row(row: &ExpanderRow, emoji: &str) {
     icon_label.set_margin_end(8);
     icon_label.set_margin_start(4);
     row.add_prefix(&icon_label);
+}
+
+fn set_widget_validation<W: gtk4::prelude::WidgetExt>(widget: &W, is_valid: bool) {
+    widget.remove_css_class("error");
+    widget.remove_css_class("success");
+
+    if is_valid {
+        widget.add_css_class("success");
+    } else {
+        widget.add_css_class("error");
+    }
 }
 
 fn load_css() {
