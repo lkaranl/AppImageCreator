@@ -16,6 +16,7 @@ use std::rc::Rc;
 use std::path::PathBuf;
 use std::time::Duration;
 use async_channel::unbounded;
+use std::fs;
 
 const APP_ID: &str = "com.github.appimage-creator";
 
@@ -416,22 +417,53 @@ fn build_ui(app: &Application) {
     output_row.set_activatable_widget(Some(&output_button));
     output_group.add(&output_row);
 
-    let app_state_for_validation = app_state.clone();
-    let binary_entry_for_validation = binary_entry.clone();
-    let icon_entry_for_validation = icon_entry.clone();
-    let name_entry_for_validation = name_entry.clone();
-    let exec_entry_for_validation = exec_entry.clone();
-    let categories_row_for_validation = categories_row.clone();
-    let output_entry_for_validation = output_entry.clone();
+    let preview_label = Label::new(Some("Preencha os campos para ver o preview."));
+    preview_label.set_wrap(true);
+    preview_label.set_halign(Align::Center);
+    preview_label.set_margin_bottom(12);
 
-    let update_validation: Rc<dyn Fn()> = Rc::new(move || {
-        let state = app_state_for_validation.borrow();
-        set_widget_validation(&binary_entry_for_validation, !state.metadata.binary_path.is_empty());
-        set_widget_validation(&icon_entry_for_validation, !state.metadata.icon_path.is_empty());
-        set_widget_validation(&name_entry_for_validation, !state.metadata.name.is_empty());
-        set_widget_validation(&exec_entry_for_validation, !state.metadata.exec.is_empty());
-        set_widget_validation(&categories_row_for_validation, !state.metadata.categories.is_empty());
-        set_widget_validation(&output_entry_for_validation, state.output_folder.is_some());
+    let app_state_for_ui = app_state.clone();
+    let binary_entry_for_ui = binary_entry.clone();
+    let icon_entry_for_ui = icon_entry.clone();
+    let name_entry_for_ui = name_entry.clone();
+    let exec_entry_for_ui = exec_entry.clone();
+    let categories_row_for_ui = categories_row.clone();
+    let output_entry_for_ui = output_entry.clone();
+    let preview_label_for_ui = preview_label.clone();
+
+    let update_ui: Rc<dyn Fn()> = Rc::new(move || {
+        let state = app_state_for_ui.borrow();
+        set_widget_validation(&binary_entry_for_ui, !state.metadata.binary_path.is_empty());
+        set_widget_validation(&icon_entry_for_ui, !state.metadata.icon_path.is_empty());
+        set_widget_validation(&name_entry_for_ui, !state.metadata.name.is_empty());
+        set_widget_validation(&exec_entry_for_ui, !state.metadata.exec.is_empty());
+        set_widget_validation(&categories_row_for_ui, !state.metadata.categories.is_empty());
+        set_widget_validation(&output_entry_for_ui, state.output_folder.is_some());
+
+        if state.metadata.name.is_empty() || state.metadata.binary_path.is_empty() {
+            preview_label_for_ui.set_text("Preencha o binário e o nome para ver o preview.");
+            return;
+        }
+
+        let file_name = format!("{}.AppImage", state.metadata.name);
+        let mut total_size: u64 = 0;
+        if let Ok(meta) = fs::metadata(&state.metadata.binary_path) {
+            total_size = total_size.saturating_add(meta.len());
+        }
+        if let Ok(meta) = fs::metadata(&state.metadata.icon_path) {
+            total_size = total_size.saturating_add(meta.len());
+        }
+        if total_size > 0 {
+            // Estimar overhead adicional de 5 MB para estrutura AppImage
+            total_size = total_size.saturating_add(5 * 1024 * 1024);
+            preview_label_for_ui.set_text(&format!(
+                "Preview: {} (≈ {})",
+                file_name,
+                format_size(total_size)
+            ));
+        } else {
+            preview_label_for_ui.set_text(&format!("Preview: {}", file_name));
+        }
     });
 
     content_box.append(&output_group);
@@ -473,6 +505,8 @@ fn build_ui(app: &Application) {
     progress_bar.set_visible(false);
     progress_bar.set_margin_top(4);
     button_content.append(&progress_bar);
+
+    button_box.append(&preview_label);
 
     let generate_button = Button::new();
     generate_button.set_child(Some(&button_content));
@@ -544,7 +578,7 @@ fn build_ui(app: &Application) {
         let window_clone = window.clone();
         let entry_clone = binary_entry.clone();
         let state_clone = app_state.clone();
-        let update_validation_clone = update_validation.clone();
+        let update_validation_clone = update_ui.clone();
         binary_button.connect_clicked(move |_| {
             let dialog = FileChooserDialog::new(
                 Some("Selecione o Binário"),
@@ -579,7 +613,7 @@ fn build_ui(app: &Application) {
         let window_clone = window.clone();
         let entry_clone = icon_entry.clone();
         let state_clone = app_state.clone();
-        let update_validation_clone = update_validation.clone();
+        let update_validation_clone = update_ui.clone();
         icon_button.connect_clicked(move |_| {
             let dialog = FileChooserDialog::new(
                 Some("Selecione o Ícone"),
@@ -614,7 +648,7 @@ fn build_ui(app: &Application) {
         let window_clone = window.clone();
         let entry_clone = output_entry.clone();
         let state_clone = app_state.clone();
-        let update_validation_clone = update_validation.clone();
+        let update_validation_clone = update_ui.clone();
         output_button.connect_clicked(move |_| {
             let dialog = FileChooserDialog::new(
                 Some("Escolher Pasta de Saída"),
@@ -649,94 +683,97 @@ fn build_ui(app: &Application) {
         &binary_entry,
         app_state.clone(),
         |s, v| s.metadata.binary_path = v,
-        update_validation.clone(),
+        update_ui.clone(),
     );
     connect_entry_to_state(
         &icon_entry,
         app_state.clone(),
         |s, v| s.metadata.icon_path = v,
-        update_validation.clone(),
+        update_ui.clone(),
     );
     connect_entry_to_state(
         &name_entry,
         app_state.clone(),
         |s, v| s.metadata.name = v,
-        update_validation.clone(),
+        update_ui.clone(),
     );
     connect_entry_to_state(
         &exec_entry,
         app_state.clone(),
         |s, v| s.metadata.exec = v,
-        update_validation.clone(),
+        update_ui.clone(),
     );
     connect_entry_to_state(
         &version_entry,
         app_state.clone(),
         |s, v| s.metadata.version = v,
-        update_validation.clone(),
+        update_ui.clone(),
     );
     connect_entry_to_state(
         &comment_entry,
         app_state.clone(),
         |s, v| s.metadata.comment = v,
-        update_validation.clone(),
+        update_ui.clone(),
     );
     connect_entry_to_state(
         &author_entry,
         app_state.clone(),
         |s, v| s.metadata.author = v,
-        update_validation.clone(),
+        update_ui.clone(),
     );
     connect_entry_to_state(
         &website_entry,
         app_state.clone(),
         |s, v| s.metadata.website = v,
-        update_validation.clone(),
+        update_ui.clone(),
     );
 
     let license_checks = Rc::new(license_checks_vec);
     let license_update_flag = Rc::new(Cell::new(false));
 
     // Conectar mudanças nos checkboxes de categorias
-    let update_validation_for_categories = update_validation.clone();
+    let update_ui_for_categories = update_ui.clone();
     for (cat_value, check) in category_checks {
         let state_clone = app_state.clone();
         let cat_value_owned = cat_value.to_string();
-        let update_validation_local = update_validation_for_categories.clone();
+        let update_ui_local = update_ui_for_categories.clone();
         check.connect_toggled(move |check_btn| {
-            let mut state = state_clone.borrow_mut();
-            let mut categories: Vec<String> = state.metadata.categories
-                .split(';')
-                .filter(|s| !s.is_empty())
-                .map(|s| s.to_string())
-                .collect();
+            {
+                let mut state = state_clone.borrow_mut();
+                let mut categories: Vec<String> = state.metadata.categories
+                    .split(';')
+                    .filter(|s| !s.is_empty())
+                    .map(|s| s.to_string())
+                    .collect();
 
-            if check_btn.is_active() {
-                // Adicionar categoria se não existir
-                if !categories.contains(&cat_value_owned) {
-                    categories.push(cat_value_owned.clone());
+                if check_btn.is_active() {
+                    // Adicionar categoria se não existir
+                    if !categories.contains(&cat_value_owned) {
+                        categories.push(cat_value_owned.clone());
+                    }
+                } else {
+                    // Remover categoria
+                    categories.retain(|c| c != &cat_value_owned);
                 }
-            } else {
-                // Remover categoria
-                categories.retain(|c| c != &cat_value_owned);
+
+                // Reconstruir string com ponto e vírgula
+                state.metadata.categories = if categories.is_empty() {
+                    String::new()
+                } else {
+                    format!("{};", categories.join(";"))
+                };
             }
 
-            // Reconstruir string com ponto e vírgula
-            state.metadata.categories = if categories.is_empty() {
-                String::new()
-            } else {
-                format!("{};", categories.join(";"))
-            };
-
-            update_validation_local.as_ref()();
+            update_ui_local.as_ref()();
         });
     }
 
-    update_validation.as_ref()();
+    update_ui.as_ref()();
 
     // Conectar seleção de licença
     {
         let license_checks_for_loop = license_checks.clone();
+        let update_ui_for_license = update_ui.clone();
         for (value, check) in license_checks_for_loop.iter() {
             let value_owned = value.clone();
             let check_clone = check.clone();
@@ -744,6 +781,7 @@ fn build_ui(app: &Application) {
             let entry_clone = license_entry.clone();
             let state_clone = app_state.clone();
             let update_flag = license_update_flag.clone();
+            let update_ui_local = update_ui_for_license.clone();
 
             check_clone.connect_toggled(move |btn| {
                 if update_flag.get() {
@@ -752,19 +790,24 @@ fn build_ui(app: &Application) {
 
                 update_flag.set(true);
 
-                if btn.is_active() {
-                    for (other_value, other_check) in checks_clone.iter() {
-                        if other_value != &value_owned {
-                            other_check.set_active(false);
+                {
+                    let mut state = state_clone.borrow_mut();
+
+                    if btn.is_active() {
+                        for (other_value, other_check) in checks_clone.iter() {
+                            if other_value != &value_owned {
+                                other_check.set_active(false);
+                            }
                         }
+                        entry_clone.set_text(&value_owned);
+                        state.metadata.license = value_owned.clone();
+                    } else if checks_clone.iter().all(|(_, c)| !c.is_active()) {
+                        entry_clone.set_text("");
+                        state.metadata.license.clear();
                     }
-                    entry_clone.set_text(&value_owned);
-                    state_clone.borrow_mut().metadata.license = value_owned.clone();
-                } else if checks_clone.iter().all(|(_, c)| !c.is_active()) {
-                    entry_clone.set_text("");
-                    state_clone.borrow_mut().metadata.license.clear();
                 }
 
+                update_ui_local.as_ref()();
                 update_flag.set(false);
             });
         }
@@ -772,6 +815,7 @@ fn build_ui(app: &Application) {
         let checks_for_entry = license_checks.clone();
         let state_for_entry = app_state.clone();
         let update_flag_entry = license_update_flag.clone();
+        let update_ui_for_entry = update_ui.clone();
 
         license_entry.connect_changed(move |entry| {
             if update_flag_entry.get() {
@@ -780,15 +824,18 @@ fn build_ui(app: &Application) {
 
             update_flag_entry.set(true);
 
-            let text = entry.text().to_string();
-            for (_, check) in checks_for_entry.iter() {
-                if check.is_active() {
-                    check.set_active(false);
+            {
+                let text = entry.text().to_string();
+                for (_, check) in checks_for_entry.iter() {
+                    if check.is_active() {
+                        check.set_active(false);
+                    }
                 }
+
+                state_for_entry.borrow_mut().metadata.license = text;
             }
 
-            state_for_entry.borrow_mut().metadata.license = text;
-
+            update_ui_for_entry.as_ref()();
             update_flag_entry.set(false);
         });
     }
@@ -928,6 +975,23 @@ fn set_widget_validation<W: gtk4::prelude::WidgetExt>(widget: &W, is_valid: bool
         widget.add_css_class("success");
     } else {
         widget.add_css_class("error");
+    }
+}
+
+fn format_size(bytes: u64) -> String {
+    const KB: f64 = 1024.0;
+    const MB: f64 = KB * 1024.0;
+    const GB: f64 = MB * 1024.0;
+
+    let size = bytes as f64;
+    if size >= GB {
+        format!("{:.2} GB", size / GB)
+    } else if size >= MB {
+        format!("{:.1} MB", size / MB)
+    } else if size >= KB {
+        format!("{:.0} KB", size / KB)
+    } else {
+        format!("{} B", bytes)
     }
 }
 
