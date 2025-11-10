@@ -131,6 +131,7 @@ fn build_ui(app: &Application) {
     let binary_row = ActionRow::new();
     binary_row.set_title("Binário");
     binary_row.set_subtitle("Executável da aplicação");
+    binary_row.set_tooltip_text(Some("Arquivo binário compilado da sua aplicação"));
     add_prefix_icon_to_action_row(&binary_row, "📦");
     let binary_entry = Entry::new();
     binary_entry.set_placeholder_text(Some("Ex: /home/usuario/Projetos/meu-app/target/release/meu-app"));
@@ -150,6 +151,7 @@ fn build_ui(app: &Application) {
     let icon_row = ActionRow::new();
     icon_row.set_title("Ícone");
     icon_row.set_subtitle("Imagem do ícone (PNG, JPG, etc)");
+    icon_row.set_tooltip_text(Some("Imagem exibida no lançador e no AppImage"));
     add_prefix_icon_to_action_row(&icon_row, "🖼️");
     let icon_entry = Entry::new();
     icon_entry.set_placeholder_text(Some("Ex: /home/usuario/Imagens/icon.png"));
@@ -175,6 +177,7 @@ fn build_ui(app: &Application) {
     // Nome
     let name_row = ActionRow::new();
     name_row.set_title("Nome");
+    name_row.set_tooltip_text(Some("Nome amigável exibido ao usuário"));
     add_prefix_icon_to_action_row(&name_row, "📝");
     let name_entry = Entry::new();
     name_entry.set_placeholder_text(Some("Ex: Meu Aplicativo"));
@@ -189,6 +192,7 @@ fn build_ui(app: &Application) {
     let exec_row = ActionRow::new();
     exec_row.set_title("Comando");
     exec_row.set_subtitle("Nome do executável (ex: myapp)");
+    exec_row.set_tooltip_text(Some("Comando usado no .desktop para iniciar a aplicação"));
     add_prefix_icon_to_action_row(&exec_row, "▶️");
     let exec_entry = Entry::new();
     exec_entry.set_placeholder_text(Some("Ex: meu-app"));
@@ -203,6 +207,7 @@ fn build_ui(app: &Application) {
     let categories_row = adw::ExpanderRow::new();
     categories_row.set_title("Categorias");
     categories_row.set_subtitle("Selecione as categorias do aplicativo");
+    categories_row.set_tooltip_text(Some("Categorias do menu seguindo o padrão FreeDesktop"));
     add_prefix_icon_to_expander_row(&categories_row, "📂");
 
     // Lista de categorias comuns do FreeDesktop
@@ -247,6 +252,7 @@ fn build_ui(app: &Application) {
     // Versão
     let version_row = ActionRow::new();
     version_row.set_title("Versão");
+    version_row.set_tooltip_text(Some("Versão exibida no metadado do AppImage"));
     add_prefix_icon_to_action_row(&version_row, "🔖");
     let version_entry = Entry::new();
     version_entry.set_placeholder_text(Some("Ex: 1.2.3"));
@@ -260,6 +266,7 @@ fn build_ui(app: &Application) {
     // Descrição
     let comment_row = ActionRow::new();
     comment_row.set_title("Descrição");
+    comment_row.set_tooltip_text(Some("Breve resumo exibido em lojas e menus"));
     add_prefix_icon_to_action_row(&comment_row, "💬");
     let comment_entry = Entry::new();
     comment_entry.set_placeholder_text(Some("Ex: Ferramenta para gerar AppImages"));
@@ -273,6 +280,7 @@ fn build_ui(app: &Application) {
     // Autor
     let author_row = ActionRow::new();
     author_row.set_title("Autor");
+    author_row.set_tooltip_text(Some("Pessoa ou organização responsável pelo app"));
     add_prefix_icon_to_action_row(&author_row, "👤");
     let author_entry = Entry::new();
     author_entry.set_placeholder_text(Some("Ex: Karan Luciano"));
@@ -287,6 +295,7 @@ fn build_ui(app: &Application) {
     let license_row = ExpanderRow::new();
     license_row.set_title("Licença");
     license_row.set_subtitle("Selecione uma licença comum ou informe outra");
+    license_row.set_tooltip_text(Some("Licença de distribuição do seu aplicativo"));
     add_prefix_icon_to_expander_row(&license_row, "📜");
 
     let license_options = vec![
@@ -329,6 +338,7 @@ fn build_ui(app: &Application) {
     // Website
     let website_row = ActionRow::new();
     website_row.set_title("Website");
+    website_row.set_tooltip_text(Some("Site oficial, repositório ou página de suporte"));
     add_prefix_icon_to_action_row(&website_row, "🌐");
     let website_entry = Entry::new();
     website_entry.set_placeholder_text(Some("Ex: https://meuapp.dev"));
@@ -349,6 +359,7 @@ fn build_ui(app: &Application) {
     let output_row = ActionRow::new();
     output_row.set_title("Pasta de Saída");
     output_row.set_subtitle("Onde o AppImage será salvo");
+    output_row.set_tooltip_text(Some("Diretório onde o arquivo AppImage final será criado"));
     add_prefix_icon_to_action_row(&output_row, "📁");
     let output_entry = Entry::new();
     output_entry.set_placeholder_text(Some("Ex: /home/usuario/Distribuicoes"));
