@@ -1,0 +1,19 @@
+[package]
+name = "appimage-creator"
+version = "1.0.0"
+edition = "2021"
+authors = ["Karan Luciano"]
+description = "Gerador de AppImage com interface gráfica GTK4"
+
+[dependencies]
+gtk4 = { version = "0.7", features = ["v4_6"] }
+libadwaita = { version = "0.5", features = ["v1_2"] }
+dirs = "5.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true
