@@ -420,8 +420,14 @@ fn build_ui(app: &Application) {
     let preview_label = Label::new(Some("Preencha os campos para ver o preview."));
     preview_label.set_wrap(true);
     preview_label.set_halign(Align::Center);
-    preview_label.set_margin_bottom(12);
+    preview_label.set_margin_bottom(4);
 
+    let time_label = Label::new(Some(""));
+    time_label.set_wrap(true);
+    time_label.set_halign(Align::Center);
+    time_label.set_margin_bottom(12);
+
+    let time_label_for_ui = time_label.clone();
     let app_state_for_ui = app_state.clone();
     let binary_entry_for_ui = binary_entry.clone();
     let icon_entry_for_ui = icon_entry.clone();
@@ -461,8 +467,15 @@ fn build_ui(app: &Application) {
                 file_name,
                 format_size(total_size)
             ));
+
+            let estimated_secs = ((total_size as f64) / (1.5 * 1024.0 * 1024.0)).ceil() as u64;
+            time_label_for_ui.set_text(&format!(
+                "Estimativa de tempo: {}",
+                format_duration(estimated_secs)
+            ));
         } else {
             preview_label_for_ui.set_text(&format!("Preview: {}", file_name));
+            time_label_for_ui.set_text("");
         }
     });
 
@@ -507,6 +520,7 @@ fn build_ui(app: &Application) {
     button_content.append(&progress_bar);
 
     button_box.append(&preview_label);
+    button_box.append(&time_label);
 
     let generate_button = Button::new();
     generate_button.set_child(Some(&button_content));
@@ -992,6 +1006,20 @@ fn format_size(bytes: u64) -> String {
         format!("{:.0} KB", size / KB)
     } else {
         format!("{} B", bytes)
+    }
+}
+
+fn format_duration(seconds: u64) -> String {
+    if seconds >= 60 {
+        let minutes = seconds / 60;
+        let remaining = seconds % 60;
+        if remaining == 0 {
+            format!("{} min", minutes)
+        } else {
+            format!("{} min {} s", minutes, remaining)
+        }
+    } else {
+        format!("{} s", seconds)
     }
 }
 
