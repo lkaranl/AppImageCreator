@@ -1,11 +1,12 @@
-use std::fs;
-use std::io;
+use std::fs::{self, File};
+use std::io::{self, Read};
 use std::path::Path;
 use std::process::Command;
 
 use image::{ImageFormat, ImageReader};
 
 use crate::AppImageMetadata;
+use md5::Context;
 
 const DESKTOP_ENTRY_TEMPLATE: &str = r#"[Desktop Entry]
 Type=Application
@@ -77,6 +78,8 @@ pub fn generate_appimage(metadata: &AppImageMetadata, output_path: &Path) -> io:
     let final_binary = bin_dir.join(&metadata.exec);
     fs::copy(&metadata.binary_path, &final_binary)?;
 
+    validate_md5(Path::new(&metadata.binary_path), &final_binary, "binário")?;
+
     // Tornar executável
     #[cfg(unix)]
     {
@@ -92,15 +95,18 @@ pub fn generate_appimage(metadata: &AppImageMetadata, output_path: &Path) -> io:
 
     let canonical_icon_dest = icon_dir.join(format!("{}.png", APPIMAGE_ICON_NAME));
     fs::copy(&icon_in_assets, &canonical_icon_dest)?;
+    validate_md5(&icon_in_assets, &canonical_icon_dest, "ícone canônico")?;
 
     if icon_name != APPIMAGE_ICON_NAME {
         let icon_dest = icon_dir.join(format!("{}.png", icon_name));
         fs::copy(&icon_in_assets, &icon_dest)?;
+        validate_md5(&icon_in_assets, &icon_dest, "ícone nomeado")?;
     }
 
     // Ícone padrão do AppImage (usado pelo arquivo .AppImage)
     let dir_icon_path = assets_dir.join(".DirIcon");
     fs::copy(&icon_in_assets, &dir_icon_path)?;
+    validate_md5(&icon_in_assets, &dir_icon_path, ".DirIcon")?;
 
     // Criar diretório de aplicações
     let apps_dir = usr_dir.join("share/applications");
@@ -290,6 +296,11 @@ strip = true
 
         // Mover para o destino final
         fs::copy(&appimage_file, output_path)?;
+        let final_hash = compute_md5(output_path)?;
+        validate_hash(&appimage_file, output_path, "AppImage final", &final_hash)?;
+
+        let md5_path = output_path.with_extension("AppImage.md5");
+        fs::write(&md5_path, format!("{}  {}\n", final_hash, output_path.file_name().unwrap().to_string_lossy()))?;
 
         // Limpar diretório temporário
         let _ = fs::remove_dir_all(&temp_dir);
@@ -347,6 +358,44 @@ fn ensure_png_icon(source: &Path, destination: &Path) -> io::Result<()> {
                 format!("Falha ao converter o ícone para PNG: {}", err),
             )
         })?;
+
+    Ok(())
+}
+
+fn compute_md5(path: &Path) -> io::Result<String> {
+    let mut file = File::open(path)?;
+    let mut context = Context::new();
+    let mut buffer = [0u8; 8192];
+
+    loop {
+        let bytes_read = file.read(&mut buffer)?;
+        if bytes_read == 0 {
+            break;
+        }
+        context.consume(&buffer[..bytes_read]);
+    }
+
+    let digest = context.compute();
+    Ok(format!("{:x}", digest))
+}
+
+fn validate_md5(original: &Path, copied: &Path, label: &str) -> io::Result<()> {
+    let original_hash = compute_md5(original)?;
+    validate_hash(original, copied, label, &original_hash)
+}
+
+fn validate_hash(_original: &Path, copied: &Path, label: &str, original_hash: &str) -> io::Result<()> {
+    let copied_hash = compute_md5(copied)?;
+
+    if original_hash != copied_hash {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            format!(
+                "Validação MD5 falhou para {} ({} != {})",
+                label, original_hash, copied_hash
+            ),
+        ));
+    }
 
     Ok(())
 }
