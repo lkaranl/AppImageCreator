@@ -5,12 +5,14 @@ use gtk4::{
     Application, Box, Button, Entry, FileChooserAction, FileChooserDialog,
     Label, Orientation, ResponseType, ScrolledWindow, Align, ProgressBar,
 };
+use gtk4::glib::{self, ControlFlow, SourceId};
 use libadwaita as adw;
 use libadwaita::prelude::*;
 use adw::{ApplicationWindow, HeaderBar, PreferencesGroup, ActionRow, Clamp, Toast, ToastOverlay};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::path::PathBuf;
+use std::time::Duration;
 
 const APP_ID: &str = "com.github.appimage-creator";
 
@@ -281,6 +283,10 @@ fn build_ui(app: &Application) {
     generate_button.add_css_class("pill");
     button_box.append(&generate_button);
 
+    let pulse_source = Rc::new(RefCell::new(None::<SourceId>));
+    let (result_sender, result_receiver) =
+        glib::MainContext::channel::<Result<PathBuf, String>>(glib::Priority::default());
+
     main_box.append(&button_box);
 
     // Criar um box principal que contém headerbar e conteúdo
@@ -293,6 +299,40 @@ fn build_ui(app: &Application) {
     toast_overlay.set_child(Some(&window_box));
 
     window.set_content(Some(&toast_overlay));
+
+    {
+        let toast_clone = toast_overlay.clone();
+        let progress_bar_clone = progress_bar.clone();
+        let button_clone = generate_button.clone();
+        let pulse_source_clone = pulse_source.clone();
+
+        result_receiver.attach(None, move |result| {
+            if let Some(source_id) = pulse_source_clone.borrow_mut().take() {
+                source_id.remove();
+            }
+
+            progress_bar_clone.set_visible(false);
+            button_clone.set_sensitive(true);
+
+            match result {
+                Ok(path) => {
+                    let toast = Toast::new(&format!(
+                        "AppImage gerado com sucesso em:\n{}",
+                        path.display()
+                    ));
+                    toast.set_timeout(5);
+                    toast_clone.add_toast(toast);
+                }
+                Err(err) => {
+                    let toast = Toast::new(&format!("Erro: {}", err));
+                    toast.set_timeout(8);
+                    toast_clone.add_toast(toast);
+                }
+            }
+
+            ControlFlow::Continue
+        });
+    }
 
     // File chooser para binário
     {
@@ -405,6 +445,8 @@ fn build_ui(app: &Application) {
         let toast_clone = toast_overlay.clone();
         let progress_bar_clone = progress_bar.clone();
         let button_clone = generate_button.clone();
+        let sender_clone = result_sender.clone();
+        let pulse_source_clone = pulse_source.clone();
 
         generate_button.connect_clicked(move |_| {
             let state_data = app_state.borrow().clone();
@@ -453,25 +495,32 @@ fn build_ui(app: &Application) {
             progress_bar_clone.set_visible(true);
             progress_bar_clone.pulse();
 
-            // Executar de forma síncrona (cargo appimage pode demorar)
-            let result = appimage::generate_appimage(metadata_data, &output_path);
-
-            // Esconder progress bar e reativar botão
-            progress_bar_clone.set_visible(false);
-            button_clone.set_sensitive(true);
-
-            match result {
-                Ok(_) => {
-                    let toast = Toast::new(&format!("AppImage gerado com sucesso em:\n{}", output_path.display()));
-                    toast.set_timeout(5);
-                    toast_clone.add_toast(toast);
-                }
-                Err(e) => {
-                    let toast = Toast::new(&format!("Erro: {}", e));
-                    toast.set_timeout(8);
-                    toast_clone.add_toast(toast);
-                }
+            if let Some(source_id) = pulse_source_clone.borrow_mut().take() {
+                source_id.remove();
             }
+
+            let progress_for_timeout = progress_bar_clone.clone();
+            let pulse_source_for_timeout = pulse_source_clone.clone();
+            let timeout_id =
+                glib::timeout_add_local(Duration::from_millis(120), move || {
+                    progress_for_timeout.pulse();
+                    ControlFlow::Continue
+                });
+            pulse_source_for_timeout.borrow_mut().replace(timeout_id);
+
+            let metadata_clone = metadata_data.clone();
+            let sender_for_thread = sender_clone.clone();
+
+            std::thread::spawn(move || {
+                let result = appimage::generate_appimage(
+                    &metadata_clone,
+                    output_path.as_path(),
+                )
+                .map(|_| output_path)
+                .map_err(|err| err.to_string());
+
+                let _ = sender_for_thread.send(result);
+            });
         });
     }
 
