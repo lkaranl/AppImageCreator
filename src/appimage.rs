@@ -34,7 +34,7 @@ const APPSTREAM_METADATA_TEMPLATE: &str = r#"<?xml version="1.0" encoding="UTF-8
 "#;
 
 pub fn generate_appimage(metadata: &AppImageMetadata, output_path: &Path) -> io::Result<()> {
-    // Criar diretório AppDir temporário
+    // Criar diretório de trabalho temporário
     let package_name = metadata.name.to_lowercase().replace(" ", "-");
     let temp_dir = std::env::temp_dir().join(format!("appimage-{}", package_name));
 
@@ -42,8 +42,19 @@ pub fn generate_appimage(metadata: &AppImageMetadata, output_path: &Path) -> io:
         fs::remove_dir_all(&temp_dir)?;
     }
 
-    let appdir = temp_dir.join("AppDir");
-    fs::create_dir_all(&appdir)?;
+    let work_dir = temp_dir.join("project");
+    fs::create_dir_all(&work_dir)?;
+
+    // Criar estrutura do projeto
+    let src_dir = work_dir.join("src");
+    fs::create_dir_all(&src_dir)?;
+
+    let assets_dir = work_dir.join("assets");
+    fs::create_dir_all(&assets_dir)?;
+
+    // Criar main.rs dummy (necessário para compilar)
+    let main_rs = src_dir.join("main.rs");
+    fs::write(&main_rs, "fn main() {}\n")?;
 
     // Nome do ícone baseado no pacote
     let icon_ext = Path::new(&metadata.icon_path)
@@ -53,8 +64,12 @@ pub fn generate_appimage(metadata: &AppImageMetadata, output_path: &Path) -> io:
     let icon_name = package_name.clone();
 
     // Criar estrutura usr
-    let usr_dir = appdir.join("usr");
+    let usr_dir = assets_dir.join("usr");
     fs::create_dir_all(&usr_dir)?;
+
+    // Copiar ícone para assets/icon.png
+    let icon_in_assets = assets_dir.join("icon.png");
+    fs::copy(&metadata.icon_path, &icon_in_assets)?;
 
     // Copiar binário para usr/bin
     let bin_dir = usr_dir.join("bin");
@@ -77,10 +92,6 @@ pub fn generate_appimage(metadata: &AppImageMetadata, output_path: &Path) -> io:
     let icon_dest = icon_dir.join(format!("{}.{}", icon_name, icon_ext));
     fs::copy(&metadata.icon_path, &icon_dest)?;
 
-    // Copiar ícone para a raiz do AppDir com o nome do app
-    let root_icon = appdir.join(format!("{}.{}", icon_name, icon_ext));
-    fs::copy(&metadata.icon_path, &root_icon)?;
-
     // Criar diretório de aplicações
     let apps_dir = usr_dir.join("share/applications");
     fs::create_dir_all(&apps_dir)?;
@@ -97,10 +108,6 @@ pub fn generate_appimage(metadata: &AppImageMetadata, output_path: &Path) -> io:
     let desktop_file_name = format!("{}.desktop", icon_name);
     let desktop_path = apps_dir.join(&desktop_file_name);
     fs::write(&desktop_path, &desktop_content)?;
-
-    // Copiar .desktop para a raiz do AppDir
-    let root_desktop = appdir.join(&desktop_file_name);
-    fs::write(&root_desktop, &desktop_content)?;
 
     // Criar diretório para metainfo
     let metainfo_dir = usr_dir.join("share/metainfo");
@@ -158,71 +165,141 @@ pub fn generate_appimage(metadata: &AppImageMetadata, output_path: &Path) -> io:
     let metainfo_path = metainfo_dir.join(&metainfo_file_name);
     fs::write(&metainfo_path, appstream_content)?;
 
-    // Criar AppRun
-    let apprun_content = format!(
-        r#"#!/bin/sh
-SELF=$(readlink -f "$0")
-HERE=${{SELF%/*}}
-
-# Configurar variáveis de ambiente
-export PATH="${{HERE}}/usr/bin:${{PATH}}"
-export LD_LIBRARY_PATH="${{HERE}}/usr/lib:${{LD_LIBRARY_PATH}}"
-export XDG_DATA_DIRS="${{HERE}}/usr/share:${{XDG_DATA_DIRS}}"
-
-# Executar o binário
-exec "${{HERE}}/usr/bin/{}" "$@"
+    // Criar Cargo.toml
+    let cargo_toml = work_dir.join("Cargo.toml");
+    let mut cargo_content = format!(
+        r#"[package]
+name = "{}"
+version = "{}"
+edition = "2021"
 "#,
-        metadata.exec
+        package_name,
+        if metadata.version.is_empty() {
+            "1.0.0"
+        } else {
+            &metadata.version
+        }
     );
 
-    let apprun_path = appdir.join("AppRun");
-    fs::write(&apprun_path, apprun_content)?;
-
-    // Tornar AppRun executável
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(&apprun_path)?.permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&apprun_path, perms)?;
+    if !metadata.author.is_empty() {
+        cargo_content.push_str(&format!("authors = [\"{}\"]\n", metadata.author));
     }
 
-    // Usar appimagetool para gerar o AppImage
-    let appimagetool_check = Command::new("appimagetool")
-        .arg("--version")
+    if !metadata.comment.is_empty() {
+        cargo_content.push_str(&format!("description = \"{}\"\n", metadata.comment));
+    }
+
+    cargo_content.push_str(
+        r#"
+[package.metadata.appimage]
+assets = ["assets/usr"]
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true
+"#,
+    );
+
+    fs::write(&cargo_toml, cargo_content)?;
+
+    // Verificar se cargo-appimage está instalado
+    let cargo_appimage_check = Command::new("cargo")
+        .args(&["appimage", "--version"])
         .output();
 
-    if appimagetool_check.is_ok() {
-        // Executar appimagetool
-        let output = Command::new("appimagetool")
-            .arg(&appdir)
-            .arg(output_path)
-            .output()?;
+    if !cargo_appimage_check.is_ok() {
+        // Limpar diretório temporário
+        let _ = fs::remove_dir_all(&temp_dir);
+
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "cargo-appimage não está instalado!\n\nPara instalar: cargo install cargo-appimage"
+        ));
+    }
+
+    // Executar cargo appimage
+    println!("Executando cargo appimage em: {}", work_dir.display());
+    let output = Command::new("cargo")
+        .arg("appimage")
+        .current_dir(&work_dir)
+        .output()?;
+
+    if !output.status.success() {
+        let error_msg = String::from_utf8_lossy(&output.stderr);
+        let out_msg = String::from_utf8_lossy(&output.stdout);
+        println!("STDOUT: {}", out_msg);
+        println!("STDERR: {}", error_msg);
 
         // Limpar diretório temporário
         let _ = fs::remove_dir_all(&temp_dir);
 
-        if output.status.success() {
-            println!("AppImage gerado com sucesso em: {}", output_path.display());
-            Ok(())
-        } else {
-            let error_msg = String::from_utf8_lossy(&output.stderr);
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("Erro ao executar appimagetool: {}", error_msg)
-            ))
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            format!("Erro ao executar cargo appimage: {}", error_msg)
+        ));
+    }
+
+    // Mostrar output do cargo appimage
+    println!("Output do cargo appimage:");
+    println!("{}", String::from_utf8_lossy(&output.stdout));
+
+    // Procurar pelo AppImage gerado em vários lugares
+    let search_paths = vec![
+        work_dir.clone(),
+        work_dir.join("target"),
+        work_dir.join("target").join("appimage"),
+    ];
+
+    let mut found_appimage = None;
+
+    for search_path in &search_paths {
+        if search_path.exists() {
+            println!("Procurando em: {}", search_path.display());
+
+            if let Ok(entries) = fs::read_dir(search_path) {
+                for entry in entries.filter_map(|e| e.ok()) {
+                    let path = entry.path();
+                    println!("  Encontrado: {}", path.display());
+
+                    if path.extension().and_then(|s| s.to_str()) == Some("AppImage") {
+                        found_appimage = Some(path);
+                        break;
+                    }
+                }
+            }
         }
-    } else {
+
+        if found_appimage.is_some() {
+            break;
+        }
+    }
+
+    if let Some(appimage_file) = found_appimage {
+        println!("AppImage encontrado: {}", appimage_file.display());
+
+        // Mover para o destino final
+        fs::copy(&appimage_file, output_path)?;
+
         // Limpar diretório temporário
         let _ = fs::remove_dir_all(&temp_dir);
+
+        println!("AppImage gerado com sucesso em: {}", output_path.display());
+        Ok(())
+    } else {
+        println!("Conteúdo do diretório de trabalho:");
+        if let Ok(entries) = fs::read_dir(&work_dir) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                println!("  {}", entry.path().display());
+            }
+        }
+
+        // NÃO limpar para você poder investigar
+        println!("Projeto mantido em: {} para investigação", work_dir.display());
 
         Err(io::Error::new(
             io::ErrorKind::NotFound,
-            "appimagetool não está instalado!\n\n\
-            Para instalar:\n\
-            wget https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage\n\
-            chmod +x appimagetool-x86_64.AppImage\n\
-            sudo mv appimagetool-x86_64.AppImage /usr/local/bin/appimagetool"
+            format!("AppImage não foi encontrado após a compilação. Projeto em: {}", work_dir.display())
         ))
     }
 }
