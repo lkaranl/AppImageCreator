@@ -3,6 +3,9 @@ use std::io;
 use std::path::Path;
 use std::process::Command;
 
+use image::io::Reader as ImageReader;
+use image::ImageFormat;
+
 use crate::AppImageMetadata;
 
 const DESKTOP_ENTRY_TEMPLATE: &str = r#"[Desktop Entry]
@@ -33,6 +36,8 @@ const APPSTREAM_METADATA_TEMPLATE: &str = r#"<?xml version="1.0" encoding="UTF-8
 </component>
 "#;
 
+const APPIMAGE_ICON_NAME: &str = "icon";
+
 pub fn generate_appimage(metadata: &AppImageMetadata, output_path: &Path) -> io::Result<()> {
     // Criar diretório de trabalho temporário
     let package_name = metadata.name.to_lowercase().replace(" ", "-");
@@ -57,19 +62,15 @@ pub fn generate_appimage(metadata: &AppImageMetadata, output_path: &Path) -> io:
     fs::write(&main_rs, "fn main() {}\n")?;
 
     // Nome do ícone baseado no pacote
-    let icon_ext = Path::new(&metadata.icon_path)
-        .extension()
-        .and_then(|s| s.to_str())
-        .unwrap_or("png");
     let icon_name = package_name.clone();
 
     // Criar estrutura usr
     let usr_dir = assets_dir.join("usr");
     fs::create_dir_all(&usr_dir)?;
 
-    // Copiar ícone para assets/icon.png
+    // Converter/copiar ícone para assets/icon.png (sempre PNG)
     let icon_in_assets = assets_dir.join("icon.png");
-    fs::copy(&metadata.icon_path, &icon_in_assets)?;
+    ensure_png_icon(Path::new(&metadata.icon_path), &icon_in_assets)?;
 
     // Copiar binário para usr/bin
     let bin_dir = usr_dir.join("bin");
@@ -89,8 +90,18 @@ pub fn generate_appimage(metadata: &AppImageMetadata, output_path: &Path) -> io:
     // Copiar ícone para usr/share/icons
     let icon_dir = usr_dir.join("share/icons/hicolor/256x256/apps");
     fs::create_dir_all(&icon_dir)?;
-    let icon_dest = icon_dir.join(format!("{}.{}", icon_name, icon_ext));
-    fs::copy(&metadata.icon_path, &icon_dest)?;
+
+    let canonical_icon_dest = icon_dir.join(format!("{}.png", APPIMAGE_ICON_NAME));
+    fs::copy(&icon_in_assets, &canonical_icon_dest)?;
+
+    if icon_name != APPIMAGE_ICON_NAME {
+        let icon_dest = icon_dir.join(format!("{}.png", icon_name));
+        fs::copy(&icon_in_assets, &icon_dest)?;
+    }
+
+    // Ícone padrão do AppImage (usado pelo arquivo .AppImage)
+    let dir_icon_path = assets_dir.join(".DirIcon");
+    fs::copy(&icon_in_assets, &dir_icon_path)?;
 
     // Criar diretório de aplicações
     let apps_dir = usr_dir.join("share/applications");
@@ -192,7 +203,7 @@ edition = "2021"
     cargo_content.push_str(
         r#"
 [package.metadata.appimage]
-assets = ["assets/usr"]
+assets = ["assets/usr", "assets/.DirIcon"]
 
 [profile.release]
 opt-level = 3
@@ -302,4 +313,41 @@ strip = true
             format!("AppImage não foi encontrado após a compilação. Projeto em: {}", work_dir.display())
         ))
     }
+}
+
+fn ensure_png_icon(source: &Path, destination: &Path) -> io::Result<()> {
+    if source
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|ext| ext.eq_ignore_ascii_case("png"))
+        .unwrap_or(false)
+    {
+        fs::copy(source, destination)?;
+        return Ok(());
+    }
+
+    let reader = ImageReader::open(source).map_err(|err| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("Falha ao abrir o ícone selecionado: {}", err),
+        )
+    })?;
+
+    let image = reader.decode().map_err(|err| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("Falha ao decodificar o ícone selecionado: {}", err),
+        )
+    })?;
+
+    image
+        .save_with_format(destination, ImageFormat::Png)
+        .map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("Falha ao converter o ícone para PNG: {}", err),
+            )
+        })?;
+
+    Ok(())
 }
