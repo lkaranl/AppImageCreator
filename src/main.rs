@@ -4,6 +4,7 @@ use gtk4::prelude::*;
 use gtk4::{
     Application, Box, Button, Entry, FileChooserAction, FileChooserDialog,
     Label, Orientation, ResponseType, ScrolledWindow, Align, ProgressBar,
+    CheckButton,
 };
 use gtk4::glib::{self, ControlFlow, SourceId};
 use libadwaita as adw;
@@ -95,6 +96,7 @@ fn build_ui(app: &Application) {
     binary_entry.set_placeholder_text(Some("Selecione o executável"));
     binary_entry.set_valign(Align::Center);
     binary_entry.set_hexpand(true);
+    binary_entry.set_width_chars(30);
     let binary_button = Button::with_label("Procurar");
     binary_button.set_valign(Align::Center);
     let binary_box = Box::new(Orientation::Horizontal, 6);
@@ -112,6 +114,7 @@ fn build_ui(app: &Application) {
     icon_entry.set_placeholder_text(Some("Selecione a imagem"));
     icon_entry.set_valign(Align::Center);
     icon_entry.set_hexpand(true);
+    icon_entry.set_width_chars(30);
     let icon_button = Button::with_label("Procurar");
     icon_button.set_valign(Align::Center);
     let icon_box = Box::new(Orientation::Horizontal, 6);
@@ -135,6 +138,7 @@ fn build_ui(app: &Application) {
     name_entry.set_placeholder_text(Some("Nome da aplicação"));
     name_entry.set_valign(Align::Center);
     name_entry.set_hexpand(true);
+    name_entry.set_width_chars(30);
     name_row.add_suffix(&name_entry);
     name_row.set_activatable_widget(Some(&name_entry));
     basic_group.add(&name_row);
@@ -147,20 +151,46 @@ fn build_ui(app: &Application) {
     exec_entry.set_placeholder_text(Some("myapp"));
     exec_entry.set_valign(Align::Center);
     exec_entry.set_hexpand(true);
+    exec_entry.set_width_chars(30);
     exec_row.add_suffix(&exec_entry);
     exec_row.set_activatable_widget(Some(&exec_entry));
     basic_group.add(&exec_row);
 
-    // Categorias
-    let categories_row = ActionRow::new();
+    // Categorias - usando ActionRow expandível com CheckButtons
+    let categories_row = adw::ExpanderRow::new();
     categories_row.set_title("Categorias");
-    categories_row.set_subtitle("Separadas por ponto e vírgula");
-    let categories_entry = Entry::new();
-    categories_entry.set_placeholder_text(Some("Utility;Development;"));
-    categories_entry.set_valign(Align::Center);
-    categories_entry.set_hexpand(true);
-    categories_row.add_suffix(&categories_entry);
-    categories_row.set_activatable_widget(Some(&categories_entry));
+    categories_row.set_subtitle("Selecione as categorias do aplicativo");
+
+    // Lista de categorias comuns do FreeDesktop
+    let category_options = vec![
+        ("AudioVideo", "Áudio e Vídeo"),
+        ("Audio", "Áudio"),
+        ("Video", "Vídeo"),
+        ("Development", "Desenvolvimento"),
+        ("Education", "Educação"),
+        ("Game", "Jogo"),
+        ("Graphics", "Gráficos"),
+        ("Network", "Rede"),
+        ("Office", "Escritório"),
+        ("Science", "Ciência"),
+        ("Settings", "Configurações"),
+        ("System", "Sistema"),
+        ("Utility", "Utilitário"),
+    ];
+
+    let mut category_checks = Vec::new();
+
+    for (cat_value, cat_label) in category_options {
+        let check_row = ActionRow::new();
+        check_row.set_title(cat_label);
+        let check = CheckButton::new();
+        check.set_valign(Align::Center);
+        check_row.add_prefix(&check);
+        check_row.set_activatable_widget(Some(&check));
+        categories_row.add_row(&check_row);
+        category_checks.push((cat_value, check));
+    }
+
     basic_group.add(&categories_row);
 
     content_box.append(&basic_group);
@@ -177,6 +207,7 @@ fn build_ui(app: &Application) {
     version_entry.set_placeholder_text(Some("1.0.0"));
     version_entry.set_valign(Align::Center);
     version_entry.set_hexpand(true);
+    version_entry.set_width_chars(30);
     version_row.add_suffix(&version_entry);
     version_row.set_activatable_widget(Some(&version_entry));
     details_group.add(&version_row);
@@ -188,6 +219,7 @@ fn build_ui(app: &Application) {
     comment_entry.set_placeholder_text(Some("Breve descrição da aplicação"));
     comment_entry.set_valign(Align::Center);
     comment_entry.set_hexpand(true);
+    comment_entry.set_width_chars(30);
     comment_row.add_suffix(&comment_entry);
     comment_row.set_activatable_widget(Some(&comment_entry));
     details_group.add(&comment_row);
@@ -199,6 +231,7 @@ fn build_ui(app: &Application) {
     author_entry.set_placeholder_text(Some("Seu nome"));
     author_entry.set_valign(Align::Center);
     author_entry.set_hexpand(true);
+    author_entry.set_width_chars(30);
     author_row.add_suffix(&author_entry);
     author_row.set_activatable_widget(Some(&author_entry));
     details_group.add(&author_row);
@@ -210,6 +243,7 @@ fn build_ui(app: &Application) {
     license_entry.set_placeholder_text(Some("MIT, GPL, Apache, etc."));
     license_entry.set_valign(Align::Center);
     license_entry.set_hexpand(true);
+    license_entry.set_width_chars(30);
     license_row.add_suffix(&license_entry);
     license_row.set_activatable_widget(Some(&license_entry));
     details_group.add(&license_row);
@@ -221,6 +255,7 @@ fn build_ui(app: &Application) {
     website_entry.set_placeholder_text(Some("https://exemplo.com"));
     website_entry.set_valign(Align::Center);
     website_entry.set_hexpand(true);
+    website_entry.set_width_chars(30);
     website_row.add_suffix(&website_entry);
     website_row.set_activatable_widget(Some(&website_entry));
     details_group.add(&website_row);
@@ -240,6 +275,7 @@ fn build_ui(app: &Application) {
     output_entry.set_editable(false);
     output_entry.set_valign(Align::Center);
     output_entry.set_hexpand(true);
+    output_entry.set_width_chars(30);
     let output_button = Button::with_label("Escolher Pasta");
     output_button.set_valign(Align::Center);
     let output_box = Box::new(Orientation::Horizontal, 6);
@@ -433,12 +469,42 @@ fn build_ui(app: &Application) {
     // Conectar mudanças nos campos de texto
     connect_entry_to_state(&name_entry, app_state.clone(), |s, v| s.metadata.name = v);
     connect_entry_to_state(&exec_entry, app_state.clone(), |s, v| s.metadata.exec = v);
-    connect_entry_to_state(&categories_entry, app_state.clone(), |s, v| s.metadata.categories = v);
     connect_entry_to_state(&version_entry, app_state.clone(), |s, v| s.metadata.version = v);
     connect_entry_to_state(&comment_entry, app_state.clone(), |s, v| s.metadata.comment = v);
     connect_entry_to_state(&author_entry, app_state.clone(), |s, v| s.metadata.author = v);
     connect_entry_to_state(&license_entry, app_state.clone(), |s, v| s.metadata.license = v);
     connect_entry_to_state(&website_entry, app_state.clone(), |s, v| s.metadata.website = v);
+
+    // Conectar mudanças nos checkboxes de categorias
+    for (cat_value, check) in category_checks {
+        let state_clone = app_state.clone();
+        let cat_value_owned = cat_value.to_string();
+        check.connect_toggled(move |check_btn| {
+            let mut state = state_clone.borrow_mut();
+            let mut categories: Vec<String> = state.metadata.categories
+                .split(';')
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string())
+                .collect();
+
+            if check_btn.is_active() {
+                // Adicionar categoria se não existir
+                if !categories.contains(&cat_value_owned) {
+                    categories.push(cat_value_owned.clone());
+                }
+            } else {
+                // Remover categoria
+                categories.retain(|c| c != &cat_value_owned);
+            }
+
+            // Reconstruir string com ponto e vírgula
+            state.metadata.categories = if categories.is_empty() {
+                String::new()
+            } else {
+                format!("{};", categories.join(";"))
+            };
+        });
+    }
 
     // Ação do botão gerar
     {
