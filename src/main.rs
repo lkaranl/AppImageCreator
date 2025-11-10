@@ -3,11 +3,11 @@ mod appimage;
 use gtk4::prelude::*;
 use gtk4::{
     Application, Box, Button, Entry, FileChooserAction, FileChooserDialog,
-    Label, Orientation, ResponseType, ScrolledWindow, Align,
+    Label, Orientation, ResponseType, ScrolledWindow, Align, Spinner,
 };
 use libadwaita as adw;
 use libadwaita::prelude::*;
-use adw::{ApplicationWindow, HeaderBar, PreferencesGroup, ActionRow, Clamp};
+use adw::{ApplicationWindow, HeaderBar, PreferencesGroup, ActionRow, Clamp, Toast, ToastOverlay};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -237,13 +237,22 @@ fn build_ui(app: &Application) {
     generate_button.add_css_class("pill");
     button_box.append(&generate_button);
 
-    // Status label
+    // Box para feedback de progresso
+    let progress_box = Box::new(Orientation::Horizontal, 12);
+    progress_box.set_halign(Align::Center);
+    progress_box.set_visible(false);
+
+    let spinner = Spinner::new();
+    spinner.set_size_request(24, 24);
+    progress_box.append(&spinner);
+
     let status_label = Label::new(None);
     status_label.set_wrap(true);
     status_label.set_wrap_mode(gtk4::pango::WrapMode::Word);
-    status_label.set_max_width_chars(60);
-    status_label.add_css_class("dim-label");
-    button_box.append(&status_label);
+    status_label.set_max_width_chars(50);
+    progress_box.append(&status_label);
+
+    button_box.append(&progress_box);
 
     main_box.append(&button_box);
 
@@ -252,7 +261,11 @@ fn build_ui(app: &Application) {
     window_box.append(&header_bar);
     window_box.append(&main_box);
 
-    window.set_content(Some(&window_box));
+    // Toast overlay para notificações
+    let toast_overlay = ToastOverlay::new();
+    toast_overlay.set_child(Some(&window_box));
+
+    window.set_content(Some(&toast_overlay));
 
     // File chooser para binário
     {
@@ -331,33 +344,41 @@ fn build_ui(app: &Application) {
     // Ação do botão gerar
     {
         let window_clone = window.clone();
+        let toast_clone = toast_overlay.clone();
+        let progress_clone = progress_box.clone();
+        let spinner_clone = spinner.clone();
         let status_clone = status_label.clone();
+        let button_clone = generate_button.clone();
+
         generate_button.connect_clicked(move |_| {
             let metadata_data = metadata.borrow().clone();
 
             // Validação
             if metadata_data.binary_path.is_empty() {
-                status_clone.set_text("Erro: Selecione o binário!");
+                let toast = Toast::new("Erro: Selecione o binário!");
+                toast_clone.add_toast(toast);
                 return;
             }
             if metadata_data.icon_path.is_empty() {
-                status_clone.set_text("Erro: Selecione o ícone!");
+                let toast = Toast::new("Erro: Selecione o ícone!");
+                toast_clone.add_toast(toast);
                 return;
             }
             if metadata_data.name.is_empty() {
-                status_clone.set_text("Erro: Preencha o nome!");
+                let toast = Toast::new("Erro: Preencha o nome!");
+                toast_clone.add_toast(toast);
                 return;
             }
             if metadata_data.exec.is_empty() {
-                status_clone.set_text("Erro: Preencha o comando exec!");
+                let toast = Toast::new("Erro: Preencha o comando exec!");
+                toast_clone.add_toast(toast);
                 return;
             }
             if metadata_data.categories.is_empty() {
-                status_clone.set_text("Erro: Preencha as categorias!");
+                let toast = Toast::new("Erro: Preencha as categorias!");
+                toast_clone.add_toast(toast);
                 return;
             }
-
-            status_clone.set_text("Gerando AppImage...");
 
             // Escolher onde salvar
             let dialog = FileChooserDialog::new(
@@ -368,24 +389,49 @@ fn build_ui(app: &Application) {
             );
             dialog.set_current_name(&format!("{}.AppImage", metadata_data.name));
 
+            let toast_clone2 = toast_clone.clone();
+            let progress_clone2 = progress_clone.clone();
+            let spinner_clone2 = spinner_clone.clone();
             let status_clone2 = status_clone.clone();
+            let button_clone2 = button_clone.clone();
+
             dialog.connect_response(move |dialog, response| {
                 if response == ResponseType::Accept {
                     if let Some(file) = dialog.file() {
                         if let Some(path) = file.path() {
-                            match appimage::generate_appimage(&metadata_data, &path) {
+                            // Mostrar feedback de progresso
+                            button_clone2.set_sensitive(false);
+                            progress_clone2.set_visible(true);
+                            spinner_clone2.start();
+                            status_clone2.set_text("Gerando AppImage...");
+
+                            // Executar de forma síncrona (cargo appimage pode demorar)
+                            let result = appimage::generate_appimage(&metadata_data, &path);
+
+                            // Atualizar UI com resultado
+                            spinner_clone2.stop();
+                            progress_clone2.set_visible(false);
+                            button_clone2.set_sensitive(true);
+
+                            match result {
                                 Ok(_) => {
-                                    status_clone2.set_text(&format!(
-                                        "AppImage gerado com sucesso em: {}",
-                                        path.display()
-                                    ));
+                                    let toast = Toast::new("AppImage gerado com sucesso!");
+                                    toast.set_timeout(5);
+                                    toast_clone2.add_toast(toast);
                                 }
                                 Err(e) => {
-                                    status_clone2.set_text(&format!("Erro ao gerar AppImage: {}", e));
+                                    let toast = Toast::new(&format!("Erro: {}", e));
+                                    toast.set_timeout(8);
+                                    toast_clone2.add_toast(toast);
                                 }
                             }
                         }
                     }
+                } else {
+                    // Cancelado - limpar estado
+                    progress_clone2.set_visible(false);
+                    spinner_clone2.stop();
+                    button_clone2.set_sensitive(true);
                 }
                 dialog.close();
             });
