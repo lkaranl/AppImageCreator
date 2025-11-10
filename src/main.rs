@@ -4,7 +4,7 @@ use gtk4::prelude::*;
 use gtk4::{
     Application, Box, Button, Entry, FileChooserAction, FileChooserDialog,
     Label, Orientation, ResponseType, ScrolledWindow, Align, ProgressBar,
-    CheckButton, CssProvider, Image,
+    CheckButton, CssProvider, Image, Separator,
 };
 use gtk4::glib::{self, ControlFlow, SourceId};
 use gtk4::gdk::Display;
@@ -500,54 +500,97 @@ fn build_ui(app: &Application) {
     clamp.set_child(Some(&scrolled));
     main_box.append(&clamp);
 
-    // Área do botão
-    let button_box = Box::new(Orientation::Vertical, 8);
-    button_box.set_margin_top(12);
-    button_box.set_margin_bottom(18);
-    button_box.set_margin_start(12);
-    button_box.set_margin_end(12);
+    // Área do botão - Card destacado com preview
+    let button_area = Box::new(Orientation::Vertical, 0);
+    button_area.set_margin_top(16);
+    button_area.set_margin_bottom(20);
+    button_area.set_margin_start(16);
+    button_area.set_margin_end(16);
 
-    // Botão com estrutura para progress
-    let button_content = Box::new(Orientation::Vertical, 8);
+    // Card container com background destacado
+    let card_box = Box::new(Orientation::Vertical, 12);
+    card_box.add_css_class("generate-card");
+    card_box.set_margin_top(12);
+    card_box.set_margin_bottom(12);
+    card_box.set_margin_start(12);
+    card_box.set_margin_end(12);
 
-    let header_box = Box::new(Orientation::Horizontal, 12);
+    // Preview info no topo do card
+    let preview_box = Box::new(Orientation::Vertical, 6);
+    preview_box.set_margin_top(16);
+    preview_box.set_margin_bottom(8);
+
+    preview_label.add_css_class("preview-label");
+    preview_label.set_margin_bottom(2);
+    preview_box.append(&preview_label);
+
+    time_label.add_css_class("time-label");
+    time_label.set_margin_bottom(0);
+    preview_box.append(&time_label);
+
+    card_box.append(&preview_box);
+
+    // Separator line
+    let separator = Separator::new(Orientation::Horizontal);
+    separator.set_margin_start(24);
+    separator.set_margin_end(24);
+    card_box.append(&separator);
+
+    // Conteúdo do botão: ícone + textos + progress
+    let button_content = Box::new(Orientation::Vertical, 10);
+    button_content.set_margin_top(12);
+    button_content.set_margin_bottom(12);
+
+    let header_box = Box::new(Orientation::Horizontal, 14);
     header_box.set_halign(Align::Center);
+    header_box.set_valign(Align::Center);
 
+    // Ícone maior e mais destacado
     let button_icon = Image::from_icon_name("system-run-symbolic");
-    button_icon.set_pixel_size(28);
+    button_icon.set_pixel_size(32);
+    button_icon.add_css_class("button-main-icon");
     header_box.append(&button_icon);
 
-    let text_box = Box::new(Orientation::Vertical, 2);
+    let text_box = Box::new(Orientation::Vertical, 3);
     let button_label = Label::new(Some("Gerar AppImage"));
-    button_label.add_css_class("title-label");
+    button_label.add_css_class("button-main-title");
+    button_label.set_halign(Align::Start);
     let button_subtitle = Label::new(Some("Empacotar aplicação em formato portátil"));
-    button_subtitle.add_css_class("subtitle-label");
+    button_subtitle.add_css_class("button-main-subtitle");
+    button_subtitle.set_halign(Align::Start);
     text_box.append(&button_label);
     text_box.append(&button_subtitle);
     header_box.append(&text_box);
 
     button_content.append(&header_box);
 
+    // Progress bar mais elegante
     let progress_bar = ProgressBar::new();
-    progress_bar.add_css_class("compact-progress");
+    progress_bar.add_css_class("main-progress-bar");
     progress_bar.set_visible(false);
-    progress_bar.set_margin_top(4);
+    progress_bar.set_margin_top(6);
+    progress_bar.set_margin_start(8);
+    progress_bar.set_margin_end(8);
     button_content.append(&progress_bar);
 
-    button_box.append(&preview_label);
-    button_box.append(&time_label);
-
+    // Botão que contém todo o conteúdo
     let generate_button = Button::new();
     generate_button.set_child(Some(&button_content));
     generate_button.add_css_class("suggested-action");
     generate_button.add_css_class("pill");
-    generate_button.add_css_class("large-action");
-    button_box.append(&generate_button);
+    generate_button.add_css_class("generate-button-main");
+    generate_button.set_margin_top(8);
+    generate_button.set_margin_bottom(12);
+    generate_button.set_margin_start(16);
+    generate_button.set_margin_end(16);
+    card_box.append(&generate_button);
+
+    button_area.append(&card_box);
 
     let pulse_source = Rc::new(RefCell::new(None::<SourceId>));
     let (result_sender, result_receiver) = unbounded::<Result<PathBuf, String>>();
 
-    main_box.append(&button_box);
+    main_box.append(&button_area);
 
     // Criar um box principal que contém headerbar e conteúdo
     let window_box = Box::new(Orientation::Vertical, 0);
@@ -1148,6 +1191,78 @@ fn load_css() {
 
         progressbar.pulsing progress {
             animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        /* Card do botão de gerar */
+        .generate-card {
+            background: alpha(@accent_bg_color, 0.08);
+            border-radius: 16px;
+            border: 1px solid alpha(@accent_bg_color, 0.15);
+            box-shadow: 0 2px 8px alpha(black, 0.05);
+        }
+
+        /* Labels de preview e tempo */
+        .preview-label {
+            font-size: 14px;
+            font-weight: 600;
+            color: @accent_color;
+        }
+
+        .time-label {
+            font-size: 12px;
+            opacity: 0.7;
+        }
+
+        /* Botão principal de gerar */
+        button.generate-button-main {
+            min-height: 64px;
+            border-radius: 12px;
+            transition: all 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        button.generate-button-main:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px alpha(@accent_bg_color, 0.3);
+        }
+
+        button.generate-button-main:active {
+            transform: translateY(0);
+        }
+
+        /* Ícone do botão */
+        .button-main-icon {
+            opacity: 0.95;
+        }
+
+        /* Título e subtítulo do botão */
+        .button-main-title {
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: -0.3px;
+        }
+
+        .button-main-subtitle {
+            font-size: 13px;
+            opacity: 0.85;
+            font-weight: 400;
+        }
+
+        /* Progress bar principal */
+        progressbar.main-progress-bar trough {
+            min-height: 8px;
+            border-radius: 10px;
+            background: alpha(@window_fg_color, 0.1);
+        }
+
+        progressbar.main-progress-bar progress {
+            min-height: 8px;
+            border-radius: 10px;
+            background: linear-gradient(90deg, @accent_color, lighter(@accent_color));
+            box-shadow: 0 2px 6px alpha(@accent_bg_color, 0.3);
+        }
+
+        progressbar.main-progress-bar.pulsing progress {
+            animation: pulse 1.2s ease-in-out infinite;
         }
     "#;
 
