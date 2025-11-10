@@ -8,12 +8,13 @@ use gtk4::{
 };
 use gtk4::glib::{self, ControlFlow, SourceId};
 use gtk4::gdk::Display;
+use gtk4::gio;
 use libadwaita as adw;
 use libadwaita::prelude::*;
 use adw::{ApplicationWindow, HeaderBar, PreferencesGroup, ActionRow, Clamp, Toast, ToastOverlay, ExpanderRow};
 use std::cell::{RefCell, Cell};
 use std::rc::Rc;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 use async_channel::unbounded;
 use std::fs;
@@ -22,7 +23,7 @@ use url::Url;
 const APP_ID: &str = "com.github.appimage-creator";
 
 #[derive(Debug, Clone, Default)]
-struct AppImageMetadata {
+pub(crate) struct AppImageMetadata {
     binary_path: String,
     icon_path: String,
     name: String,
@@ -61,7 +62,7 @@ fn build_ui(app: &Application) {
     let window = ApplicationWindow::builder()
         .application(app)
         .default_width(700)
-        .default_height(600)
+        .default_height(1000)
         .build();
 
     let css_provider = CssProvider::new();
@@ -237,6 +238,9 @@ fn build_ui(app: &Application) {
     exec_row.add_suffix(&exec_entry);
     exec_row.set_activatable_widget(Some(&exec_entry));
     basic_group.add(&exec_row);
+
+    let exec_override_flag = Rc::new(Cell::new(false));
+    let exec_updating_flag = Rc::new(Cell::new(false));
 
     // Categorias - usando ActionRow expandível com CheckButtons
     let categories_row = adw::ExpanderRow::new();
@@ -581,10 +585,24 @@ fn build_ui(app: &Application) {
 
                 match result {
                     Ok(path) => {
+                        let destination_path = path.clone();
                         let toast = Toast::new(&format!(
                             "AppImage gerado com sucesso em:\n{}",
-                            path.display()
+                            destination_path.display()
                         ));
+                        if let Some(folder) = destination_path.parent() {
+                            let folder_path = folder.to_path_buf();
+                            toast.set_button_label(Some("Abrir pasta"));
+                            toast.connect_button_clicked(move |_| {
+                                let file = gio::File::for_path(&folder_path);
+                                if let Err(err) = gio::AppInfo::launch_default_for_uri(
+                                    &file.uri(),
+                                    None::<&gio::AppLaunchContext>,
+                                ) {
+                                    eprintln!("Falha ao abrir pasta: {}", err);
+                                }
+                            });
+                        }
                         toast.set_timeout(5);
                         toast_clone.add_toast(toast);
                     }
@@ -722,12 +740,21 @@ fn build_ui(app: &Application) {
         |s, v| s.metadata.name = v,
         update_ui.clone(),
     );
-    connect_entry_to_state(
-        &exec_entry,
-        app_state.clone(),
-        |s, v| s.metadata.exec = v,
-        update_ui.clone(),
-    );
+    {
+        let exec_override_flag_clone = exec_override_flag.clone();
+        let exec_updating_flag_clone = exec_updating_flag.clone();
+        connect_entry_to_state(
+            &exec_entry,
+            app_state.clone(),
+            move |s, v| {
+                s.metadata.exec = v.clone();
+                if !exec_updating_flag_clone.get() {
+                    exec_override_flag_clone.set(!v.is_empty());
+                }
+            },
+            update_ui.clone(),
+        );
+    }
     connect_entry_to_state(
         &version_entry,
         app_state.clone(),
@@ -752,6 +779,43 @@ fn build_ui(app: &Application) {
         |s, v| s.metadata.website = v,
         update_ui.clone(),
     );
+
+    {
+        let exec_entry_clone = exec_entry.clone();
+        let exec_override_flag_clone = exec_override_flag.clone();
+        let exec_updating_flag_clone = exec_updating_flag.clone();
+        binary_entry.connect_changed(move |entry| {
+            if exec_override_flag_clone.get() {
+                return;
+            }
+
+            let path_text = entry.text().to_string();
+            if path_text.trim().is_empty() {
+                if exec_entry_clone.text().as_str().is_empty() {
+                    return;
+                }
+                exec_updating_flag_clone.set(true);
+                exec_entry_clone.set_text("");
+                exec_updating_flag_clone.set(false);
+                return;
+            }
+
+            if let Some(stem) = Path::new(&path_text)
+                .file_stem()
+                .and_then(|s| s.to_str())
+            {
+                if stem.is_empty() {
+                    return;
+                }
+                if exec_entry_clone.text().as_str() == stem {
+                    return;
+                }
+                exec_updating_flag_clone.set(true);
+                exec_entry_clone.set_text(stem);
+                exec_updating_flag_clone.set(false);
+            }
+        });
+    }
 
     let license_checks = Rc::new(license_checks_vec);
     let license_update_flag = Rc::new(Cell::new(false));
