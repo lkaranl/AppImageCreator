@@ -809,34 +809,34 @@ fn build_ui(app: &Application) {
 
             // Validar pasta de saída primeiro
             if state_data.output_folder.is_none() {
-                let toast = Toast::new("Erro: Selecione a pasta de saída!");
+                let toast = Toast::new("Atenção: Selecione a pasta de saída!");
                 toast_clone.add_toast(toast);
                 return;
             }
 
             // Validação dos campos obrigatórios
             if metadata_data.binary_path.is_empty() {
-                let toast = Toast::new("Erro: Selecione o binário!");
+                let toast = Toast::new("Atenção: Selecione o binário!");
                 toast_clone.add_toast(toast);
                 return;
             }
             if metadata_data.icon_path.is_empty() {
-                let toast = Toast::new("Erro: Selecione o ícone!");
+                let toast = Toast::new("Atenção: Selecione o ícone!");
                 toast_clone.add_toast(toast);
                 return;
             }
             if metadata_data.name.is_empty() {
-                let toast = Toast::new("Erro: Preencha o nome!");
+                let toast = Toast::new("Atenção: Preencha o nome!");
                 toast_clone.add_toast(toast);
                 return;
             }
             if metadata_data.exec.is_empty() {
-                let toast = Toast::new("Erro: Preencha o comando exec!");
+                let toast = Toast::new("Atenção: Preencha o comando exec!");
                 toast_clone.add_toast(toast);
                 return;
             }
             if metadata_data.categories.is_empty() {
-                let toast = Toast::new("Erro: Preencha as categorias!");
+                let toast = Toast::new("Atenção: Preencha as categorias!");
                 toast_clone.add_toast(toast);
                 return;
             }
