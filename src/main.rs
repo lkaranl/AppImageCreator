@@ -10,8 +10,8 @@ use gtk4::glib::{self, ControlFlow, SourceId};
 use gtk4::gdk::Display;
 use libadwaita as adw;
 use libadwaita::prelude::*;
-use adw::{ApplicationWindow, HeaderBar, PreferencesGroup, ActionRow, Clamp, Toast, ToastOverlay};
-use std::cell::RefCell;
+use adw::{ApplicationWindow, HeaderBar, PreferencesGroup, ActionRow, Clamp, Toast, ToastOverlay, ExpanderRow};
+use std::cell::{RefCell, Cell};
 use std::rc::Rc;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -101,6 +101,7 @@ fn build_ui(app: &Application) {
     let binary_row = ActionRow::new();
     binary_row.set_title("Binário");
     binary_row.set_subtitle("Executável da aplicação");
+    add_prefix_icon_to_action_row(&binary_row, "📦");
     let binary_entry = Entry::new();
     binary_entry.set_placeholder_text(Some("Selecione o executável"));
     binary_entry.set_valign(Align::Center);
@@ -119,6 +120,7 @@ fn build_ui(app: &Application) {
     let icon_row = ActionRow::new();
     icon_row.set_title("Ícone");
     icon_row.set_subtitle("Imagem do ícone (PNG, JPG, etc)");
+    add_prefix_icon_to_action_row(&icon_row, "🖼️");
     let icon_entry = Entry::new();
     icon_entry.set_placeholder_text(Some("Selecione a imagem"));
     icon_entry.set_valign(Align::Center);
@@ -143,6 +145,7 @@ fn build_ui(app: &Application) {
     // Nome
     let name_row = ActionRow::new();
     name_row.set_title("Nome");
+    add_prefix_icon_to_action_row(&name_row, "📝");
     let name_entry = Entry::new();
     name_entry.set_placeholder_text(Some("Nome da aplicação"));
     name_entry.set_valign(Align::Center);
@@ -156,6 +159,7 @@ fn build_ui(app: &Application) {
     let exec_row = ActionRow::new();
     exec_row.set_title("Comando");
     exec_row.set_subtitle("Nome do executável (ex: myapp)");
+    add_prefix_icon_to_action_row(&exec_row, "▶️");
     let exec_entry = Entry::new();
     exec_entry.set_placeholder_text(Some("myapp"));
     exec_entry.set_valign(Align::Center);
@@ -169,6 +173,7 @@ fn build_ui(app: &Application) {
     let categories_row = adw::ExpanderRow::new();
     categories_row.set_title("Categorias");
     categories_row.set_subtitle("Selecione as categorias do aplicativo");
+    add_prefix_icon_to_expander_row(&categories_row, "📂");
 
     // Lista de categorias comuns do FreeDesktop
     let category_options = vec![
@@ -212,6 +217,7 @@ fn build_ui(app: &Application) {
     // Versão
     let version_row = ActionRow::new();
     version_row.set_title("Versão");
+    add_prefix_icon_to_action_row(&version_row, "🔖");
     let version_entry = Entry::new();
     version_entry.set_placeholder_text(Some("1.0.0"));
     version_entry.set_valign(Align::Center);
@@ -224,6 +230,7 @@ fn build_ui(app: &Application) {
     // Descrição
     let comment_row = ActionRow::new();
     comment_row.set_title("Descrição");
+    add_prefix_icon_to_action_row(&comment_row, "💬");
     let comment_entry = Entry::new();
     comment_entry.set_placeholder_text(Some("Breve descrição da aplicação"));
     comment_entry.set_valign(Align::Center);
@@ -236,6 +243,7 @@ fn build_ui(app: &Application) {
     // Autor
     let author_row = ActionRow::new();
     author_row.set_title("Autor");
+    add_prefix_icon_to_action_row(&author_row, "👤");
     let author_entry = Entry::new();
     author_entry.set_placeholder_text(Some("Seu nome"));
     author_entry.set_valign(Align::Center);
@@ -246,20 +254,52 @@ fn build_ui(app: &Application) {
     details_group.add(&author_row);
 
     // Licença
-    let license_row = ActionRow::new();
+    let license_row = ExpanderRow::new();
     license_row.set_title("Licença");
+    license_row.set_subtitle("Selecione uma licença comum ou informe outra");
+    add_prefix_icon_to_expander_row(&license_row, "📜");
+
+    let license_options = vec![
+        ("GPL-3.0-or-later", "GNU GPL 3.0 ou superior"),
+        ("GPL-2.0-or-later", "GNU GPL 2.0 ou superior"),
+        ("LGPL-3.0-or-later", "GNU LGPL 3.0 ou superior"),
+        ("MIT", "MIT"),
+        ("Apache-2.0", "Apache 2.0"),
+        ("BSD-3-Clause", "BSD 3-Clause"),
+        ("MPL-2.0", "Mozilla Public License 2.0"),
+        ("Proprietary", "Proprietária"),
+    ];
+
+    let mut license_checks_vec: Vec<(String, CheckButton)> = Vec::new();
+
+    for (value, label) in &license_options {
+        let check_row = ActionRow::new();
+        check_row.set_title(*label);
+        let check = CheckButton::new();
+        check.set_valign(Align::Center);
+        check_row.add_prefix(&check);
+        check_row.set_activatable_widget(Some(&check));
+        license_row.add_row(&check_row);
+        license_checks_vec.push((value.to_string(), check));
+    }
+
+    let custom_license_row = ActionRow::new();
+    custom_license_row.set_title("Outra licença");
     let license_entry = Entry::new();
     license_entry.set_placeholder_text(Some("MIT, GPL, Apache, etc."));
     license_entry.set_valign(Align::Center);
     license_entry.set_hexpand(true);
     license_entry.set_width_chars(30);
-    license_row.add_suffix(&license_entry);
-    license_row.set_activatable_widget(Some(&license_entry));
+    custom_license_row.add_suffix(&license_entry);
+    custom_license_row.set_activatable_widget(Some(&license_entry));
+    license_row.add_row(&custom_license_row);
+
     details_group.add(&license_row);
 
     // Website
     let website_row = ActionRow::new();
     website_row.set_title("Website");
+    add_prefix_icon_to_action_row(&website_row, "🌐");
     let website_entry = Entry::new();
     website_entry.set_placeholder_text(Some("https://exemplo.com"));
     website_entry.set_valign(Align::Center);
@@ -277,8 +317,9 @@ fn build_ui(app: &Application) {
     output_group.set_description(Some("Onde o AppImage será salvo"));
 
     let output_row = ActionRow::new();
-    output_row.set_title("Pasta de destino");
-    output_row.set_subtitle("Selecione onde salvar o AppImage");
+    output_row.set_title("Pasta de Saída");
+    output_row.set_subtitle("Onde o AppImage será salvo");
+    add_prefix_icon_to_action_row(&output_row, "📁");
     let output_entry = Entry::new();
     output_entry.set_placeholder_text(Some("Nenhuma pasta selecionada"));
     output_entry.set_editable(false);
@@ -487,8 +528,10 @@ fn build_ui(app: &Application) {
     connect_entry_to_state(&version_entry, app_state.clone(), |s, v| s.metadata.version = v);
     connect_entry_to_state(&comment_entry, app_state.clone(), |s, v| s.metadata.comment = v);
     connect_entry_to_state(&author_entry, app_state.clone(), |s, v| s.metadata.author = v);
-    connect_entry_to_state(&license_entry, app_state.clone(), |s, v| s.metadata.license = v);
     connect_entry_to_state(&website_entry, app_state.clone(), |s, v| s.metadata.website = v);
+
+    let license_checks = Rc::new(license_checks_vec);
+    let license_update_flag = Rc::new(Cell::new(false));
 
     // Conectar mudanças nos checkboxes de categorias
     for (cat_value, check) in category_checks {
@@ -518,6 +561,65 @@ fn build_ui(app: &Application) {
             } else {
                 format!("{};", categories.join(";"))
             };
+        });
+    }
+
+    // Conectar seleção de licença
+    {
+        let license_checks_for_loop = license_checks.clone();
+        for (value, check) in license_checks_for_loop.iter() {
+            let value_owned = value.clone();
+            let check_clone = check.clone();
+            let checks_clone = license_checks.clone();
+            let entry_clone = license_entry.clone();
+            let state_clone = app_state.clone();
+            let update_flag = license_update_flag.clone();
+
+            check_clone.connect_toggled(move |btn| {
+                if update_flag.get() {
+                    return;
+                }
+
+                update_flag.set(true);
+
+                if btn.is_active() {
+                    for (other_value, other_check) in checks_clone.iter() {
+                        if other_value != &value_owned {
+                            other_check.set_active(false);
+                        }
+                    }
+                    entry_clone.set_text(&value_owned);
+                    state_clone.borrow_mut().metadata.license = value_owned.clone();
+                } else if checks_clone.iter().all(|(_, c)| !c.is_active()) {
+                    entry_clone.set_text("");
+                    state_clone.borrow_mut().metadata.license.clear();
+                }
+
+                update_flag.set(false);
+            });
+        }
+
+        let checks_for_entry = license_checks.clone();
+        let state_for_entry = app_state.clone();
+        let update_flag_entry = license_update_flag.clone();
+
+        license_entry.connect_changed(move |entry| {
+            if update_flag_entry.get() {
+                return;
+            }
+
+            update_flag_entry.set(true);
+
+            let text = entry.text().to_string();
+            for (_, check) in checks_for_entry.iter() {
+                if check.is_active() {
+                    check.set_active(false);
+                }
+            }
+
+            state_for_entry.borrow_mut().metadata.license = text;
+
+            update_flag_entry.set(false);
         });
     }
 
@@ -621,6 +723,22 @@ where
         let text = entry.text().to_string();
         setter(&mut state.borrow_mut(), text);
     });
+}
+
+fn add_prefix_icon_to_action_row(row: &ActionRow, emoji: &str) {
+    let icon_label = Label::new(Some(emoji));
+    icon_label.add_css_class("dim-label");
+    icon_label.set_margin_end(8);
+    icon_label.set_margin_start(4);
+    row.add_prefix(&icon_label);
+}
+
+fn add_prefix_icon_to_expander_row(row: &ExpanderRow, emoji: &str) {
+    let icon_label = Label::new(Some(emoji));
+    icon_label.add_css_class("dim-label");
+    icon_label.set_margin_end(8);
+    icon_label.set_margin_start(4);
+    row.add_prefix(&icon_label);
 }
 
 fn load_css() {
