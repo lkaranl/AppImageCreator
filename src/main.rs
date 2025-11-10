@@ -4,7 +4,7 @@ use gtk4::prelude::*;
 use gtk4::{
     Application, Box, Button, Entry, FileChooserAction, FileChooserDialog,
     Label, Orientation, ResponseType, ScrolledWindow, Align, ProgressBar,
-    CheckButton, CssProvider,
+    CheckButton, CssProvider, Image,
 };
 use gtk4::glib::{self, ControlFlow, SourceId};
 use gtk4::gdk::Display;
@@ -80,6 +80,25 @@ fn build_ui(app: &Application) {
         .preferences-row.success {
             border: 1px solid @success_color;
             border-radius: 6px;
+        }
+        button.large-action {
+            padding: 18px 28px;
+            border-radius: 24px;
+        }
+        button.large-action .title-label {
+            font-size: 17px;
+            font-weight: 600;
+        }
+        button.large-action .subtitle-label {
+            font-size: 12px;
+            opacity: 0.85;
+        }
+        progressbar.compact-progress trough {
+            min-height: 6px;
+            border-radius: 12px;
+        }
+        progressbar.compact-progress progress {
+            border-radius: 12px;
         }
         "
     );
@@ -429,31 +448,37 @@ fn build_ui(app: &Application) {
     button_box.set_margin_end(12);
 
     // Botão com estrutura para progress
-    let button_content = Box::new(Orientation::Vertical, 4);
+    let button_content = Box::new(Orientation::Vertical, 8);
 
-    let button_icon = Label::new(Some("⚙️"));
-    button_icon.set_margin_top(10);
-    button_icon.set_margin_bottom(2);
-    button_icon.add_css_class("dim-label");
-    button_content.append(&button_icon);
+    let header_box = Box::new(Orientation::Horizontal, 12);
+    header_box.set_halign(Align::Center);
 
+    let button_icon = Image::from_icon_name("system-run-symbolic");
+    button_icon.set_pixel_size(28);
+    header_box.append(&button_icon);
+
+    let text_box = Box::new(Orientation::Vertical, 2);
     let button_label = Label::new(Some("Gerar AppImage"));
-    button_label.set_margin_top(2);
-    button_label.set_margin_bottom(4);
-    button_content.append(&button_label);
+    button_label.add_css_class("title-label");
+    let button_subtitle = Label::new(Some("Empacotar aplicação em formato portátil"));
+    button_subtitle.add_css_class("subtitle-label");
+    text_box.append(&button_label);
+    text_box.append(&button_subtitle);
+    header_box.append(&text_box);
+
+    button_content.append(&header_box);
 
     let progress_bar = ProgressBar::new();
+    progress_bar.add_css_class("compact-progress");
     progress_bar.set_visible(false);
-    progress_bar.set_margin_start(20);
-    progress_bar.set_margin_end(20);
-    progress_bar.set_margin_bottom(8);
-    progress_bar.set_size_request(-1, 6); // Altura de 6px
+    progress_bar.set_margin_top(4);
     button_content.append(&progress_bar);
 
     let generate_button = Button::new();
     generate_button.set_child(Some(&button_content));
     generate_button.add_css_class("suggested-action");
     generate_button.add_css_class("pill");
+    generate_button.add_css_class("large-action");
     button_box.append(&generate_button);
 
     let pulse_source = Rc::new(RefCell::new(None::<SourceId>));
@@ -477,6 +502,7 @@ fn build_ui(app: &Application) {
         let progress_bar_clone = progress_bar.clone();
         let button_clone = generate_button.clone();
         let button_label_clone = button_label.clone();
+        let button_subtitle_clone = button_subtitle.clone();
         let pulse_source_clone = pulse_source.clone();
 
         glib::MainContext::default().spawn_local(async move {
@@ -491,6 +517,7 @@ fn build_ui(app: &Application) {
                 progress_bar_clone.set_visible(false);
                 progress_bar_clone.set_fraction(0.0);
                 button_label_clone.set_text("Gerar AppImage");
+                button_subtitle_clone.set_text("Empacotar aplicação em formato portátil");
                 button_clone.set_sensitive(true);
 
                 match result {
@@ -772,6 +799,7 @@ fn build_ui(app: &Application) {
         let progress_bar_clone = progress_bar.clone();
         let button_clone = generate_button.clone();
         let button_label_clone = button_label.clone();
+        let button_subtitle_clone = button_subtitle.clone();
         let sender_clone = result_sender.clone();
         let pulse_source_clone = pulse_source.clone();
 
@@ -820,6 +848,7 @@ fn build_ui(app: &Application) {
             // Mostrar progress bar no botão com feedback visual melhorado
             button_clone.set_sensitive(false);
             button_label_clone.set_text("Gerando AppImage...");
+            button_subtitle_clone.set_text("Isso pode levar alguns instantes");
             progress_bar_clone.set_visible(true);
             progress_bar_clone.set_fraction(0.0);
             progress_bar_clone.add_css_class("pulsing");
