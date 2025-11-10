@@ -133,7 +133,7 @@ fn build_ui(app: &Application) {
     binary_row.set_subtitle("Executável da aplicação");
     add_prefix_icon_to_action_row(&binary_row, "📦");
     let binary_entry = Entry::new();
-    binary_entry.set_placeholder_text(Some("Selecione o executável"));
+    binary_entry.set_placeholder_text(Some("Ex: /home/usuario/Projetos/meu-app/target/release/meu-app"));
     binary_entry.set_valign(Align::Center);
     binary_entry.set_hexpand(true);
     binary_entry.set_width_chars(30);
@@ -152,7 +152,7 @@ fn build_ui(app: &Application) {
     icon_row.set_subtitle("Imagem do ícone (PNG, JPG, etc)");
     add_prefix_icon_to_action_row(&icon_row, "🖼️");
     let icon_entry = Entry::new();
-    icon_entry.set_placeholder_text(Some("Selecione a imagem"));
+    icon_entry.set_placeholder_text(Some("Ex: /home/usuario/Imagens/icon.png"));
     icon_entry.set_valign(Align::Center);
     icon_entry.set_hexpand(true);
     icon_entry.set_width_chars(30);
@@ -177,7 +177,7 @@ fn build_ui(app: &Application) {
     name_row.set_title("Nome");
     add_prefix_icon_to_action_row(&name_row, "📝");
     let name_entry = Entry::new();
-    name_entry.set_placeholder_text(Some("Nome da aplicação"));
+    name_entry.set_placeholder_text(Some("Ex: Meu Aplicativo"));
     name_entry.set_valign(Align::Center);
     name_entry.set_hexpand(true);
     name_entry.set_width_chars(30);
@@ -191,7 +191,7 @@ fn build_ui(app: &Application) {
     exec_row.set_subtitle("Nome do executável (ex: myapp)");
     add_prefix_icon_to_action_row(&exec_row, "▶️");
     let exec_entry = Entry::new();
-    exec_entry.set_placeholder_text(Some("myapp"));
+    exec_entry.set_placeholder_text(Some("Ex: meu-app"));
     exec_entry.set_valign(Align::Center);
     exec_entry.set_hexpand(true);
     exec_entry.set_width_chars(30);
@@ -249,7 +249,7 @@ fn build_ui(app: &Application) {
     version_row.set_title("Versão");
     add_prefix_icon_to_action_row(&version_row, "🔖");
     let version_entry = Entry::new();
-    version_entry.set_placeholder_text(Some("1.0.0"));
+    version_entry.set_placeholder_text(Some("Ex: 1.2.3"));
     version_entry.set_valign(Align::Center);
     version_entry.set_hexpand(true);
     version_entry.set_width_chars(30);
@@ -262,7 +262,7 @@ fn build_ui(app: &Application) {
     comment_row.set_title("Descrição");
     add_prefix_icon_to_action_row(&comment_row, "💬");
     let comment_entry = Entry::new();
-    comment_entry.set_placeholder_text(Some("Breve descrição da aplicação"));
+    comment_entry.set_placeholder_text(Some("Ex: Ferramenta para gerar AppImages"));
     comment_entry.set_valign(Align::Center);
     comment_entry.set_hexpand(true);
     comment_entry.set_width_chars(30);
@@ -275,7 +275,7 @@ fn build_ui(app: &Application) {
     author_row.set_title("Autor");
     add_prefix_icon_to_action_row(&author_row, "👤");
     let author_entry = Entry::new();
-    author_entry.set_placeholder_text(Some("Seu nome"));
+    author_entry.set_placeholder_text(Some("Ex: Karan Luciano"));
     author_entry.set_valign(Align::Center);
     author_entry.set_hexpand(true);
     author_entry.set_width_chars(30);
@@ -316,7 +316,7 @@ fn build_ui(app: &Application) {
     let custom_license_row = ActionRow::new();
     custom_license_row.set_title("Outra licença");
     let license_entry = Entry::new();
-    license_entry.set_placeholder_text(Some("MIT, GPL, Apache, etc."));
+    license_entry.set_placeholder_text(Some("Ex: GPL-3.0-or-later"));
     license_entry.set_valign(Align::Center);
     license_entry.set_hexpand(true);
     license_entry.set_width_chars(30);
@@ -331,7 +331,7 @@ fn build_ui(app: &Application) {
     website_row.set_title("Website");
     add_prefix_icon_to_action_row(&website_row, "🌐");
     let website_entry = Entry::new();
-    website_entry.set_placeholder_text(Some("https://exemplo.com"));
+    website_entry.set_placeholder_text(Some("Ex: https://meuapp.dev"));
     website_entry.set_valign(Align::Center);
     website_entry.set_hexpand(true);
     website_entry.set_width_chars(30);
@@ -351,7 +351,7 @@ fn build_ui(app: &Application) {
     output_row.set_subtitle("Onde o AppImage será salvo");
     add_prefix_icon_to_action_row(&output_row, "📁");
     let output_entry = Entry::new();
-    output_entry.set_placeholder_text(Some("Nenhuma pasta selecionada"));
+    output_entry.set_placeholder_text(Some("Ex: /home/usuario/Distribuicoes"));
     output_entry.set_editable(false);
     output_entry.set_valign(Align::Center);
     output_entry.set_hexpand(true);
