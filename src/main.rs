@@ -17,6 +17,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 use async_channel::unbounded;
 use std::fs;
+use url::Url;
 
 const APP_ID: &str = "com.github.appimage-creator";
 
@@ -435,6 +436,7 @@ fn build_ui(app: &Application) {
     let exec_entry_for_ui = exec_entry.clone();
     let categories_row_for_ui = categories_row.clone();
     let output_entry_for_ui = output_entry.clone();
+    let website_entry_for_ui = website_entry.clone();
     let preview_label_for_ui = preview_label.clone();
 
     let update_ui: Rc<dyn Fn()> = Rc::new(move || {
@@ -445,6 +447,15 @@ fn build_ui(app: &Application) {
         set_widget_validation(&exec_entry_for_ui, !state.metadata.exec.is_empty());
         set_widget_validation(&categories_row_for_ui, !state.metadata.categories.is_empty());
         set_widget_validation(&output_entry_for_ui, state.output_folder.is_some());
+
+        if state.metadata.website.trim().is_empty() {
+            website_entry_for_ui.remove_css_class("error");
+            website_entry_for_ui.remove_css_class("success");
+        } else if Url::parse(state.metadata.website.trim()).is_ok() {
+            set_widget_validation(&website_entry_for_ui, true);
+        } else {
+            set_widget_validation(&website_entry_for_ui, false);
+        }
 
         if state.metadata.name.is_empty() || state.metadata.binary_path.is_empty() {
             preview_label_for_ui.set_text("Preencha o binário e o nome para ver o preview.");
