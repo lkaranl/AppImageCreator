@@ -3,13 +3,14 @@ mod appimage;
 use gtk4::prelude::*;
 use gtk4::{
     Application, Box, Button, Entry, FileChooserAction, FileChooserDialog,
-    Label, Orientation, ResponseType, ScrolledWindow, Align, Spinner,
+    Label, Orientation, ResponseType, ScrolledWindow, Align, ProgressBar,
 };
 use libadwaita as adw;
 use libadwaita::prelude::*;
 use adw::{ApplicationWindow, HeaderBar, PreferencesGroup, ActionRow, Clamp, Toast, ToastOverlay};
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::path::PathBuf;
 
 const APP_ID: &str = "com.github.appimage-creator";
 
@@ -27,6 +28,12 @@ struct AppImageMetadata {
     website: String,
 }
 
+#[derive(Debug, Clone, Default)]
+struct AppState {
+    metadata: AppImageMetadata,
+    output_folder: Option<PathBuf>,
+}
+
 fn main() {
     adw::init().expect("Falha ao inicializar libadwaita");
 
@@ -39,7 +46,7 @@ fn main() {
 }
 
 fn build_ui(app: &Application) {
-    let metadata = Rc::new(RefCell::new(AppImageMetadata::default()));
+    let app_state = Rc::new(RefCell::new(AppState::default()));
 
     let window = ApplicationWindow::builder()
         .application(app)
@@ -218,41 +225,61 @@ fn build_ui(app: &Application) {
 
     content_box.append(&details_group);
 
+    // === GRUPO 4: Pasta de Saída ===
+    let output_group = PreferencesGroup::new();
+    output_group.set_title("Pasta de Saída");
+    output_group.set_description(Some("Onde o AppImage será salvo"));
+
+    let output_row = ActionRow::new();
+    output_row.set_title("Pasta de destino");
+    output_row.set_subtitle("Selecione onde salvar o AppImage");
+    let output_entry = Entry::new();
+    output_entry.set_placeholder_text(Some("Nenhuma pasta selecionada"));
+    output_entry.set_editable(false);
+    output_entry.set_valign(Align::Center);
+    output_entry.set_hexpand(true);
+    let output_button = Button::with_label("Escolher Pasta");
+    output_button.set_valign(Align::Center);
+    let output_box = Box::new(Orientation::Horizontal, 6);
+    output_box.append(&output_entry);
+    output_box.append(&output_button);
+    output_row.add_suffix(&output_box);
+    output_row.set_activatable_widget(Some(&output_button));
+    output_group.add(&output_row);
+
+    content_box.append(&output_group);
+
     scrolled.set_child(Some(&content_box));
     clamp.set_child(Some(&scrolled));
     main_box.append(&clamp);
 
-    // Área do botão e status
-    let button_box = Box::new(Orientation::Vertical, 12);
+    // Área do botão
+    let button_box = Box::new(Orientation::Vertical, 8);
     button_box.set_margin_top(12);
     button_box.set_margin_bottom(18);
     button_box.set_margin_start(12);
     button_box.set_margin_end(12);
 
-    let generate_button = Button::builder()
-        .label("Gerar AppImage")
-        .height_request(48)
-        .build();
+    // Botão com estrutura para progress
+    let button_content = Box::new(Orientation::Vertical, 0);
+
+    let button_label = Label::new(Some("Gerar AppImage"));
+    button_label.set_margin_top(12);
+    button_label.set_margin_bottom(8);
+    button_content.append(&button_label);
+
+    let progress_bar = ProgressBar::new();
+    progress_bar.set_visible(false);
+    progress_bar.set_margin_start(12);
+    progress_bar.set_margin_end(12);
+    progress_bar.set_margin_bottom(4);
+    button_content.append(&progress_bar);
+
+    let generate_button = Button::new();
+    generate_button.set_child(Some(&button_content));
     generate_button.add_css_class("suggested-action");
     generate_button.add_css_class("pill");
     button_box.append(&generate_button);
-
-    // Box para feedback de progresso
-    let progress_box = Box::new(Orientation::Horizontal, 12);
-    progress_box.set_halign(Align::Center);
-    progress_box.set_visible(false);
-
-    let spinner = Spinner::new();
-    spinner.set_size_request(24, 24);
-    progress_box.append(&spinner);
-
-    let status_label = Label::new(None);
-    status_label.set_wrap(true);
-    status_label.set_wrap_mode(gtk4::pango::WrapMode::Word);
-    status_label.set_max_width_chars(50);
-    progress_box.append(&status_label);
-
-    button_box.append(&progress_box);
 
     main_box.append(&button_box);
 
@@ -271,7 +298,7 @@ fn build_ui(app: &Application) {
     {
         let window_clone = window.clone();
         let entry_clone = binary_entry.clone();
-        let metadata_clone = metadata.clone();
+        let state_clone = app_state.clone();
         binary_button.connect_clicked(move |_| {
             let dialog = FileChooserDialog::new(
                 Some("Selecione o Binário"),
@@ -281,14 +308,14 @@ fn build_ui(app: &Application) {
             );
 
             let entry_clone2 = entry_clone.clone();
-            let metadata_clone2 = metadata_clone.clone();
+            let state_clone2 = state_clone.clone();
             dialog.connect_response(move |dialog, response| {
                 if response == ResponseType::Accept {
                     if let Some(file) = dialog.file() {
                         if let Some(path) = file.path() {
                             let path_str = path.to_string_lossy().to_string();
                             entry_clone2.set_text(&path_str);
-                            metadata_clone2.borrow_mut().binary_path = path_str;
+                            state_clone2.borrow_mut().metadata.binary_path = path_str;
                         }
                     }
                 }
@@ -303,7 +330,7 @@ fn build_ui(app: &Application) {
     {
         let window_clone = window.clone();
         let entry_clone = icon_entry.clone();
-        let metadata_clone = metadata.clone();
+        let state_clone = app_state.clone();
         icon_button.connect_clicked(move |_| {
             let dialog = FileChooserDialog::new(
                 Some("Selecione o Ícone"),
@@ -313,14 +340,46 @@ fn build_ui(app: &Application) {
             );
 
             let entry_clone2 = entry_clone.clone();
-            let metadata_clone2 = metadata_clone.clone();
+            let state_clone2 = state_clone.clone();
             dialog.connect_response(move |dialog, response| {
                 if response == ResponseType::Accept {
                     if let Some(file) = dialog.file() {
                         if let Some(path) = file.path() {
                             let path_str = path.to_string_lossy().to_string();
                             entry_clone2.set_text(&path_str);
-                            metadata_clone2.borrow_mut().icon_path = path_str;
+                            state_clone2.borrow_mut().metadata.icon_path = path_str;
+                        }
+                    }
+                }
+                dialog.close();
+            });
+
+            dialog.show();
+        });
+    }
+
+    // Folder chooser para pasta de saída
+    {
+        let window_clone = window.clone();
+        let entry_clone = output_entry.clone();
+        let state_clone = app_state.clone();
+        output_button.connect_clicked(move |_| {
+            let dialog = FileChooserDialog::new(
+                Some("Escolher Pasta de Saída"),
+                Some(&window_clone),
+                FileChooserAction::SelectFolder,
+                &[("Cancelar", ResponseType::Cancel), ("Selecionar", ResponseType::Accept)],
+            );
+
+            let entry_clone2 = entry_clone.clone();
+            let state_clone2 = state_clone.clone();
+            dialog.connect_response(move |dialog, response| {
+                if response == ResponseType::Accept {
+                    if let Some(file) = dialog.file() {
+                        if let Some(path) = file.path() {
+                            let path_str = path.to_string_lossy().to_string();
+                            entry_clone2.set_text(&path_str);
+                            state_clone2.borrow_mut().output_folder = Some(path);
                         }
                     }
                 }
@@ -332,28 +391,33 @@ fn build_ui(app: &Application) {
     }
 
     // Conectar mudanças nos campos de texto
-    connect_entry_to_metadata(&name_entry, metadata.clone(), |m, v| m.name = v);
-    connect_entry_to_metadata(&exec_entry, metadata.clone(), |m, v| m.exec = v);
-    connect_entry_to_metadata(&categories_entry, metadata.clone(), |m, v| m.categories = v);
-    connect_entry_to_metadata(&version_entry, metadata.clone(), |m, v| m.version = v);
-    connect_entry_to_metadata(&comment_entry, metadata.clone(), |m, v| m.comment = v);
-    connect_entry_to_metadata(&author_entry, metadata.clone(), |m, v| m.author = v);
-    connect_entry_to_metadata(&license_entry, metadata.clone(), |m, v| m.license = v);
-    connect_entry_to_metadata(&website_entry, metadata.clone(), |m, v| m.website = v);
+    connect_entry_to_state(&name_entry, app_state.clone(), |s, v| s.metadata.name = v);
+    connect_entry_to_state(&exec_entry, app_state.clone(), |s, v| s.metadata.exec = v);
+    connect_entry_to_state(&categories_entry, app_state.clone(), |s, v| s.metadata.categories = v);
+    connect_entry_to_state(&version_entry, app_state.clone(), |s, v| s.metadata.version = v);
+    connect_entry_to_state(&comment_entry, app_state.clone(), |s, v| s.metadata.comment = v);
+    connect_entry_to_state(&author_entry, app_state.clone(), |s, v| s.metadata.author = v);
+    connect_entry_to_state(&license_entry, app_state.clone(), |s, v| s.metadata.license = v);
+    connect_entry_to_state(&website_entry, app_state.clone(), |s, v| s.metadata.website = v);
 
     // Ação do botão gerar
     {
-        let window_clone = window.clone();
         let toast_clone = toast_overlay.clone();
-        let progress_clone = progress_box.clone();
-        let spinner_clone = spinner.clone();
-        let status_clone = status_label.clone();
+        let progress_bar_clone = progress_bar.clone();
         let button_clone = generate_button.clone();
 
         generate_button.connect_clicked(move |_| {
-            let metadata_data = metadata.borrow().clone();
+            let state_data = app_state.borrow().clone();
+            let metadata_data = &state_data.metadata;
 
-            // Validação
+            // Validar pasta de saída primeiro
+            if state_data.output_folder.is_none() {
+                let toast = Toast::new("Erro: Selecione a pasta de saída!");
+                toast_clone.add_toast(toast);
+                return;
+            }
+
+            // Validação dos campos obrigatórios
             if metadata_data.binary_path.is_empty() {
                 let toast = Toast::new("Erro: Selecione o binário!");
                 toast_clone.add_toast(toast);
@@ -380,75 +444,46 @@ fn build_ui(app: &Application) {
                 return;
             }
 
-            // Escolher onde salvar
-            let dialog = FileChooserDialog::new(
-                Some("Salvar AppImage"),
-                Some(&window_clone),
-                FileChooserAction::Save,
-                &[("Cancelar", ResponseType::Cancel), ("Salvar", ResponseType::Accept)],
-            );
-            dialog.set_current_name(&format!("{}.AppImage", metadata_data.name));
+            // Construir caminho de saída
+            let output_folder = state_data.output_folder.unwrap();
+            let output_path = output_folder.join(format!("{}.AppImage", metadata_data.name));
 
-            let toast_clone2 = toast_clone.clone();
-            let progress_clone2 = progress_clone.clone();
-            let spinner_clone2 = spinner_clone.clone();
-            let status_clone2 = status_clone.clone();
-            let button_clone2 = button_clone.clone();
+            // Mostrar progress bar no botão
+            button_clone.set_sensitive(false);
+            progress_bar_clone.set_visible(true);
+            progress_bar_clone.pulse();
 
-            dialog.connect_response(move |dialog, response| {
-                if response == ResponseType::Accept {
-                    if let Some(file) = dialog.file() {
-                        if let Some(path) = file.path() {
-                            // Mostrar feedback de progresso
-                            button_clone2.set_sensitive(false);
-                            progress_clone2.set_visible(true);
-                            spinner_clone2.start();
-                            status_clone2.set_text("Gerando AppImage...");
+            // Executar de forma síncrona (cargo appimage pode demorar)
+            let result = appimage::generate_appimage(metadata_data, &output_path);
 
-                            // Executar de forma síncrona (cargo appimage pode demorar)
-                            let result = appimage::generate_appimage(&metadata_data, &path);
+            // Esconder progress bar e reativar botão
+            progress_bar_clone.set_visible(false);
+            button_clone.set_sensitive(true);
 
-                            // Atualizar UI com resultado
-                            spinner_clone2.stop();
-                            progress_clone2.set_visible(false);
-                            button_clone2.set_sensitive(true);
-
-                            match result {
-                                Ok(_) => {
-                                    let toast = Toast::new("AppImage gerado com sucesso!");
-                                    toast.set_timeout(5);
-                                    toast_clone2.add_toast(toast);
-                                }
-                                Err(e) => {
-                                    let toast = Toast::new(&format!("Erro: {}", e));
-                                    toast.set_timeout(8);
-                                    toast_clone2.add_toast(toast);
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    // Cancelado - limpar estado
-                    progress_clone2.set_visible(false);
-                    spinner_clone2.stop();
-                    button_clone2.set_sensitive(true);
+            match result {
+                Ok(_) => {
+                    let toast = Toast::new(&format!("AppImage gerado com sucesso em:\n{}", output_path.display()));
+                    toast.set_timeout(5);
+                    toast_clone.add_toast(toast);
                 }
-                dialog.close();
-            });
-
-            dialog.show();
+                Err(e) => {
+                    let toast = Toast::new(&format!("Erro: {}", e));
+                    toast.set_timeout(8);
+                    toast_clone.add_toast(toast);
+                }
+            }
         });
     }
 
     window.present();
 }
 
-fn connect_entry_to_metadata<F>(entry: &Entry, metadata: Rc<RefCell<AppImageMetadata>>, setter: F)
+fn connect_entry_to_state<F>(entry: &Entry, state: Rc<RefCell<AppState>>, setter: F)
 where
-    F: Fn(&mut AppImageMetadata, String) + 'static,
+    F: Fn(&mut AppState, String) + 'static,
 {
     entry.connect_changed(move |entry| {
         let text = entry.text().to_string();
-        setter(&mut metadata.borrow_mut(), text);
+        setter(&mut state.borrow_mut(), text);
     });
 }
